@@ -251,9 +251,9 @@ end
     end
 
     @testset "Unary operator spacing heuristic" begin
-        old = MathTeXEngine.unspace_binary_operators_heuristic_enabled[]
+        old = MathTeXEngine._unspace_binary_operators_heuristic_enabled[]
         try
-            MathTeXEngine.unspace_binary_operators_heuristic_enabled[] = true
+            MathTeXEngine._unspace_binary_operators_heuristic_enabled[] = true
 
             test_parse(raw"$-1$", (:inline_math, (:symbol, '−'), (:digit, '1')))
             test_parse(raw"$2-1$",
@@ -276,13 +276,13 @@ end
                         (:symbol, '±'),
                         (:sqrt, (:digit, '3'))))
 
-            MathTeXEngine.unspace_binary_operators_heuristic_enabled[] = false
+            MathTeXEngine._unspace_binary_operators_heuristic_enabled[] = false
             test_parse(raw"$-1$", (:inline_math, (:spaced, (:symbol, '−')), (:digit, '1')))
             test_parse(raw"$\alpha^*$",
                        (:inline_math,
                         (:decorated, (:symbol, 'α'), nothing, (:spaced, (:symbol, '*')))))
         finally
-            MathTeXEngine.unspace_binary_operators_heuristic_enabled[] = old
+            MathTeXEngine._unspace_binary_operators_heuristic_enabled[] = old
         end
     end
 

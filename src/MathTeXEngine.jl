@@ -28,10 +28,8 @@ export glyph_index
 # Reexport from LaTeXStrings
 export @L_str
 
-# Global layout/parser heuristics. These are Refs so callers and tests can
-# temporarily toggle them without redefining package methods.
-const italic_correction_enabled = Ref(true)
-const unspace_binary_operators_heuristic_enabled = Ref(true)
+const _italic_correction_enabled = Ref(true)
+const _unspace_binary_operators_heuristic_enabled = Ref(true)
 
 include("parser/tokenizer.jl")
 include("parser/texexpr.jl")

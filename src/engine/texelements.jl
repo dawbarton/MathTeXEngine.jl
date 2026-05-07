@@ -164,7 +164,7 @@ function TeXChar(char::Char, state::LayoutState, char_type)
         glyph_index(font, char),
         font,
         font_family,
-        font_id == :italic || font_id == :bolditalic,
+        is_slanted_font(font_id),
         char,
     )
 end
@@ -188,7 +188,7 @@ function TeXChar(name::AbstractString, state::LayoutState, char_type ; represent
         glyph_index(font, name),
         font,
         font_family,
-        font_id == :italic || font_id == :bolditalic,
+        is_slanted_font(font_id),
         represented,
     )
 end

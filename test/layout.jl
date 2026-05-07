@@ -87,12 +87,12 @@ end
     end
 
     @testset "Italic boundary correction" begin
-        old = MathTeXEngine.italic_correction_enabled[]
+        old = MathTeXEngine._italic_correction_enabled[]
         try
-            MathTeXEngine.italic_correction_enabled[] = false
+            MathTeXEngine._italic_correction_enabled[] = false
             without = generate_tex_elements(L"(f)x η(t)")
 
-            MathTeXEngine.italic_correction_enabled[] = true
+            MathTeXEngine._italic_correction_enabled[] = true
             with = generate_tex_elements(L"(f)x η(t)")
 
             xpos(elems, i) = elems[i][2][1]
@@ -108,7 +108,7 @@ end
             @test xpos(with, 7) - xpos(with, 6) < xpos(without, 7) - xpos(without, 6)
             @test xpos(with, 8) - xpos(with, 7) > xpos(without, 8) - xpos(without, 7)
         finally
-            MathTeXEngine.italic_correction_enabled[] = old
+            MathTeXEngine._italic_correction_enabled[] = old
         end
     end
 

@@ -26,7 +26,7 @@ function tex_layout(expr, state)
     head = expr.head
     args = [expr.args...]
     shrink = 0.6
-    italic_correction = state.tex_mode == :inline_math && italic_correction_enabled[]
+    italic_correction = state.tex_mode == :inline_math && _italic_correction_enabled[]
 
     try
         if isleaf(expr)  # :char, :delimiter, :digit, :punctuation, :symbol
@@ -162,7 +162,7 @@ function tex_layout(expr, state)
                 elements = _add_function_spacing(args, elements)
             end
 
-            italic_correction = mode == :inline_math && italic_correction_enabled[]
+            italic_correction = mode == :inline_math && _italic_correction_enabled[]
             return horizontal_layout(elements; italic_correction)
         elseif head == :integral
             pad = 0.1
@@ -321,15 +321,8 @@ function _add_function_spacing(args, elements)
 end
 
 function _function_takes_space(args, i)
-    for j in (i+1):length(args)
-        arg = args[j]
-        if arg.head == :char && only(arg.args) == ' '
-            continue
-        end
-        return !_is_opening_delimiter(arg)
-    end
-
-    return false
+    next = findnext(arg -> !(arg.head == :char && only(arg.args) == ' '), args, i + 1)
+    return !isnothing(next) && !_is_opening_delimiter(args[next])
 end
 
 function _is_opening_delimiter(expr)
