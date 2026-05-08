@@ -148,6 +148,17 @@ struct TeXChar <: TeXElement
     represented_char::Char
 end
 
+function default_math_glyph(char_or_name)
+    font = load_font(_default_fonts[:math])
+    return glyph_index(font, char_or_name), font
+end
+
+function default_math_texchar(char_or_name, font_family, represented::Char)
+    glyph_id, font = default_math_glyph(char_or_name)
+    glyph_id == 0 && return nothing
+    return TeXChar(glyph_id, font, font_family, false, represented)
+end
+
 function TeXChar(char::Char, state::LayoutState, char_type)
     font_family = state.font_family
 
@@ -160,13 +171,15 @@ function TeXChar(char::Char, state::LayoutState, char_type)
     font_id = get_font_identifier(state, char_type)
     font = get_font(font_family, font_id)
 
-    return TeXChar(
-        glyph_index(font, char),
-        font,
-        font_family,
-        is_slanted_font(font_id),
-        char,
-    )
+    glyph_id = glyph_index(font, char)
+    if glyph_id == 0 && char_type in (:delimiter, :symbol)
+        fallback = default_math_texchar(char, font_family, char)
+        if !isnothing(fallback)
+            return fallback
+        end
+    end
+
+    return TeXChar(glyph_id, font, font_family, is_slanted_font(font_id), char)
 end
 
 is_slanted_math_symbol(char, char_type) = char_type == :symbol && is_lowercase_greek(char)
@@ -183,9 +196,10 @@ function TeXChar(name::AbstractString, state::LayoutState, char_type ; represent
     font_family = state.font_family
     font_id = get_font_identifier(state, char_type)
     font = get_font(font_family, font_id)
+    glyph_id = glyph_index(font, name)
 
     return TeXChar(
-        glyph_index(font, name),
+        glyph_id,
         font,
         font_family,
         is_slanted_font(font_id),

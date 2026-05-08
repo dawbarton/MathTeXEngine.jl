@@ -11,6 +11,81 @@ function argument_as_string(arg)
     return String(Char.(arg.args))
 end
 
+const _TEXT_OPERATOR_SPACE = 0.2
+const _SCRIPT_OPERATOR_SPACE = 0.08
+const _MIN_SCRIPT_GAP = 0.04
+const _TALL_SCRIPT_CORE_HEIGHT = 1.2
+const _TALL_SCRIPT_VERTICAL_CLEARANCE = 0.65
+const _TALL_SCRIPT_CORE_OVERLAP = 0.3
+const _SCRIPT_FRACTION_RULE_WIDTH = 0.45
+const _SCRIPT_FRACTION_RULE_SHIFT = 0.18
+
+function _script_y_positions(core, sub, super, font_family, sub_shrink, super_shrink)
+    xh = xheight(font_family)
+    script_gap = max(thickness(font_family), _MIN_SCRIPT_GAP)
+
+    sub_y = -0.15
+    if inkheight(sub) * sub_shrink > xh
+        sub_y = min(sub_y, -topinkbound(sub) * sub_shrink - script_gap)
+    end
+
+    super_y = 0.85xh
+    if inkheight(super) * super_shrink > xh
+        super_y = max(super_y, -bottominkbound(super) * super_shrink + xh + script_gap)
+    end
+
+    if inkheight(core) > _TALL_SCRIPT_CORE_HEIGHT
+        sub_top = bottominkbound(core) + _TALL_SCRIPT_VERTICAL_CLEARANCE * xh
+        super_bottom = topinkbound(core) - _TALL_SCRIPT_VERTICAL_CLEARANCE * xh
+        sub_y = min(sub_y, sub_top - topinkbound(sub) * sub_shrink)
+        super_y = max(super_y, super_bottom - bottominkbound(super) * super_shrink)
+    end
+
+    return sub_y, super_y
+end
+
+function _script_shrink(elem, font_family, shrink)
+    return inkheight(elem) * shrink > xheight(font_family) ? 0.5 : shrink
+end
+
+function _sqrt_radical(state, target_height)
+    font_family = state.font_family
+    radicals = TeXElement[TeXChar('√', state, :symbol)]
+
+    for radical_name in ("radical.v1", "radical.v2", "radical.v3", "radical.v4")
+        candidate = TeXChar(radical_name, state, :symbol; represented = '√')
+        candidate.glyph_id != 0 && push!(radicals, candidate)
+
+        fallback = default_math_texchar(radical_name, font_family, '√')
+        isnothing(fallback) || push!(radicals, fallback)
+    end
+
+    sort!(radicals; by = inkheight)
+    for candidate in radicals
+        if candidate.glyph_id == 0
+            continue
+        end
+        inkheight(candidate) >= target_height && return candidate
+    end
+
+    return last(radicals)
+end
+
+const _math_delimiter_chars = Set(['(', ')', '[', ']', '{', '}', '⟨', '⟩'])
+
+function _delimiter_element(char, state)
+    font_family = state.font_family
+
+    if char in _math_delimiter_chars || char in ('|', '‖')
+        texchar = default_math_texchar(char, font_family, char)
+        if !isnothing(texchar)
+            return texchar
+        end
+    end
+
+    return TeXChar(char, state, :delimiter)
+end
+
 """
     tex_layout(mathexpr::TeXExpr, font_family)
 
@@ -33,6 +108,8 @@ function tex_layout(expr, state)
             char = args[1]
             if char == ' ' && state.tex_mode == :inline_math
                 return Space(0.0)
+            elseif head == :delimiter
+                return _delimiter_element(char, state)
             end
             return TeXChar(char, state, head)
         elseif head == :combining_accent
@@ -56,32 +133,46 @@ function tex_layout(expr, state)
                 slanted = is_slanted(core),
             )
         elseif head == :decorated
-            core, sub, super = tex_layout.(args, state)
+            core = tex_layout(args[1], state)
+            script_state = increase_script_level(state)
+            sub = tex_layout(args[2], script_state)
+            super = tex_layout(args[3], script_state)
 
+            sub_shrink = _script_shrink(sub, font_family, shrink)
+            super_shrink = _script_shrink(super, font_family, shrink)
+            tall_core = inkheight(core) > _TALL_SCRIPT_CORE_HEIGHT
+            sub_y, super_y = _script_y_positions(
+                core,
+                sub,
+                super,
+                font_family,
+                sub_shrink,
+                super_shrink,
+            )
             if !isnothing(args[3]) && args[3].head == :primes
                 super_x = min(hadvance(core), rightinkbound(core)) - 0.1
                 super_y = 0.1
                 super_shrink = 1
             else
                 super_x = max(hadvance(core), rightinkbound(core))
-                super_y = xheight(font_family)
-                super_shrink = shrink
+                if tall_core
+                    super_x -= _TALL_SCRIPT_CORE_OVERLAP * xheight(font_family)
+                end
+            end
+            sub_x = max(hadvance(core), rightinkbound(core)) +
+                (1 - sub_shrink) * leftinkbound(sub)
+            if tall_core
+                sub_x -= _TALL_SCRIPT_CORE_OVERLAP * xheight(font_family)
             end
 
             return Group(
                 [core, sub, super],
                 Point2f[
                     (0, 0),
-                    (
-                        # Respect italic overhangs so lower scripts do not
-                        # tuck under the visible ink of the core glyph.
-                        max(hadvance(core), rightinkbound(core)) +
-                        (1 - shrink) * leftinkbound(sub),
-                        -0.2,
-                    ),
+                    (sub_x, sub_y),
                     (super_x, super_y),
                 ],
-                [1, shrink, super_shrink];
+                [1, sub_shrink, super_shrink];
                 slanted = is_slanted(core) || is_slanted(super),
             )
         elseif head == :delimited
@@ -95,16 +186,14 @@ function tex_layout(expr, state)
 
             dxs = hadvance.(elements) .* scales
             xs = [0, cumsum(dxs[1:end-1])...]
+            content_midline = vmid(content)
 
-            # TODO Height calculation for the parenthesis looks wrong
-            # TODO Check what the algorithm should be there
-            # Center the delimiters in the middle of the bot and top baselines ?
             return Group(
                 elements,
                 Point2f[
-                    (xs[1], -bottominkbound(left) + bottominkbound(content)),
+                    (xs[1], content_midline - vmid(left) * left_scale),
                     (xs[2], 0),
-                    (xs[3], -bottominkbound(right) + bottominkbound(content)),
+                    (xs[3], content_midline - vmid(right) * right_scale),
                 ],
                 scales;
                 slanted = is_slanted(right),
@@ -118,26 +207,35 @@ function tex_layout(expr, state)
             numerator = tex_layout(args[1], state)
             denominator = tex_layout(args[2], state)
 
-            # extend fraction line by half an xheight
             xh = xheight(font_family)
-            w = max(inkwidth(numerator), inkwidth(denominator)) + xh/2
+            argument_width = max(inkwidth(numerator), inkwidth(denominator))
+            rule_width = state.script_level > 0 ?
+                _SCRIPT_FRACTION_RULE_WIDTH * argument_width :
+                argument_width
 
             # fixed width fraction line
-            lw = thickness(font_family)
+            rule_thickness = thickness(font_family)
 
-            line = HLine(w, lw)
-            y0 = xh/2 - lw/2
+            line = HLine(rule_width, rule_thickness)
+            y0 = xh/2 - rule_thickness/2
 
-            # horizontal center align for numerator and denominator
-            x1 = (w-inkwidth(numerator))/2
-            x2 = (w-inkwidth(denominator))/2
+            # Align the rule and arguments around the same center. This matters
+            # for shortened script-style rules, where anchoring at x = 0 makes
+            # the rule look too long on one side.
+            center = argument_width / 2
+            xline = center - hmid(line)
+            if state.script_level > 0
+                xline -= _SCRIPT_FRACTION_RULE_SHIFT * argument_width
+            end
+            x1 = center - hmid(numerator)
+            x2 = center - hmid(denominator)
 
-            ytop    = y0 + xh/2 - bottominkbound(numerator)
+            ytop = y0 + xh/2 - bottominkbound(numerator)
             ybottom = y0 - xh/2 - topinkbound(denominator)
 
             return Group(
                 [line, numerator, denominator],
-                Point2f[(0, y0), (x1, ytop), (x2, ybottom)];
+                Point2f[(xline, y0), (x1, ytop), (x2, ybottom)];
                 slanted = is_slanted(numerator) || is_slanted(denominator),
             )
         elseif head == :function
@@ -212,35 +310,28 @@ function tex_layout(expr, state)
             return Space(args[1])
         elseif head == :spaced
             sym = tex_layout(args[1], state)
-            return horizontal_layout([Space(0.2), sym, Space(0.2)]; italic_correction)
+            space = state.script_level > 0 ? _SCRIPT_OPERATOR_SPACE : _TEXT_OPERATOR_SPACE
+            return horizontal_layout([Space(space), sym, Space(space)]; italic_correction)
         elseif head == :sqrt
             content = tex_layout(args[1], state)
-            h = inkheight(content)
-            sqrt = nothing
+            rule_thickness = thickness(font_family)
+            clearance = max(rule_thickness, xheight(font_family) / 3)
+            target_height = inkheight(content) + clearance
+            radical = _sqrt_radical(state, target_height)
 
-            for name in ["radical.v1", "radical.v2", "radical.v3", "radical.v4"]
-                sqrt = TeXChar(name, state, :symbol ; represented = '√')
-                pad = inkheight(sqrt)
-                if inkheight(sqrt) >= 1.05h
-                    pad = (inkheight(sqrt) - 1.05h) / 2
-                    break
-                end
-            end
+            line_top = topinkbound(content) + clearance
+            y0 = line_top - topinkbound(radical)
+            line_y = line_top - rule_thickness / 2
 
-            h = inkheight(sqrt)
-
-            lw = thickness(font_family)
-            y0 = bottominkbound(content) - bottominkbound(sqrt) - pad
-            y = y0 + topinkbound(sqrt) - lw
-
-            hline = HLine(inkwidth(content) + pad, lw)
+            hline_width = max(inkwidth(content), xheight(font_family) / 2) + clearance
+            hline = HLine(hline_width, rule_thickness)
 
             return Group(
-                [sqrt, hline, content, Space(1.2)],
+                [radical, hline, content, Space(1.2)],
                 Point2f[
                     (0, y0),
-                    (rightinkbound(sqrt) - lw/2, y + lw/2),
-                    (rightinkbound(sqrt), 0),
+                    (rightinkbound(radical) - rule_thickness/2, line_y),
+                    (rightinkbound(radical), 0),
                     (rightinkbound(content), 0),
                 ],
             )

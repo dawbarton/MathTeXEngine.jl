@@ -2,25 +2,35 @@ struct LayoutState
     font_family::FontFamily
     font_modifiers::Vector{Symbol}
     tex_mode::Symbol
+    script_level::Int
 end
 
-LayoutState(font_family::FontFamily, modifiers::Vector) = LayoutState(font_family, modifiers, :text)
+LayoutState(font_family::FontFamily, modifiers::Vector) = LayoutState(font_family, modifiers, :text, 0)
 LayoutState(font_family::FontFamily) = LayoutState(font_family, Symbol[])
 LayoutState() = LayoutState(FontFamily())
 
 function Base.show(io::IO, state::LayoutState)
-    print(io, "LayoutState($(state.font_modifiers), $(state.tex_mode))")
+    print(io, "LayoutState($(state.font_modifiers), $(state.tex_mode), $(state.script_level))")
 end
 
 Base.broadcastable(state::LayoutState) = Ref(state)
 
 function change_mode(state::LayoutState, mode)
-    LayoutState(state.font_family, state.font_modifiers, mode)
+    LayoutState(state.font_family, state.font_modifiers, mode, state.script_level)
 end
 
 function add_font_modifier(state::LayoutState, modifier)
     modifiers = vcat(state.font_modifiers, modifier)
-    return LayoutState(state.font_family, modifiers, state.tex_mode)
+    LayoutState(state.font_family, modifiers, state.tex_mode, state.script_level)
+end
+
+function increase_script_level(state::LayoutState)
+    return LayoutState(
+        state.font_family,
+        state.font_modifiers,
+        state.tex_mode,
+        state.script_level + 1,
+    )
 end
 
 function get_font_identifier(state::LayoutState, char_type)

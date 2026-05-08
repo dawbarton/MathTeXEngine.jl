@@ -11,6 +11,10 @@ function test_same_layout(layout1, layout2)
     end
 end
 
+ink_bottom(element) = element[2][2] + element[3] * bottominkbound(element[1])
+ink_top(element) = element[2][2] + element[3] * topinkbound(element[1])
+ink_vmid(element) = (ink_bottom(element) + ink_top(element)) / 2
+
 @testset "Layout" begin
     @testset "Decorated" begin
         expr = manual_texexpr((:decorated, 'x', 'b', 't'))
@@ -31,6 +35,14 @@ end
 
         @test length(generate_tex_elements(L"a_b^c")) == 3
         @test length(generate_tex_elements(L"_b^c")) == 2
+
+        elems = generate_tex_elements(L"\left(\frac{dy}{dx}\right)_0")
+        @test ink_bottom(elems[8]) < ink_bottom(elems[7]) - 0.03
+        @test ink_top(elems[8]) > ink_bottom(elems[7])
+
+        elems = generate_tex_elements(L"\left(\frac{A^{xy}}{B}\right)^{1/4}")
+        @test ink_top(elems[8]) > ink_top(elems[7]) + 0.03
+        @test ink_bottom(elems[8]) < ink_top(elems[7])
     end
 
     @testset "Delimited" begin
@@ -40,6 +52,21 @@ end
         hs = inkheight.(layout.elements) .* layout.scales
         @test hs[1] >= hs[2]
         @test hs[3] >= hs[2]
+
+        elems = generate_tex_elements(
+            L"\left\langle\left|\left\langle\left|\int\right|\right\rangle\right|\right\rangle",
+        )
+        @test maximum(abs(ink_vmid(elem) - ink_vmid(elems[5])) for elem in elems) < 0.1
+
+        for font_name in keys(MathTeXEngine.default_font_families)
+            bar = tex_layout(manual_texexpr((:delimiter, '|')), MathTeXEngine.FontFamily(font_name))
+            default_bar_id, _ = MathTeXEngine.default_math_glyph('|')
+            @test bar.glyph_id == default_bar_id
+
+            paren = tex_layout(manual_texexpr((:delimiter, '(')), MathTeXEngine.FontFamily(font_name))
+            default_paren_id, _ = MathTeXEngine.default_math_glyph('(')
+            @test paren.glyph_id == default_paren_id
+        end
     end
 
     @testset "Font" begin
@@ -118,13 +145,53 @@ end
         # Issue #129: LaTeX inserts a thin space after math operators when
         # the argument is not parenthesized.
         @test xpos(generate_tex_elements(L"\log x"), 4) >
-              xpos(generate_tex_elements(L"\mathrm{log}x"), 4) + 0.1
+            xpos(generate_tex_elements(L"\mathrm{log}x"), 4) + 0.1
         @test xpos(generate_tex_elements(L"\sin\alpha"), 4) >
-              xpos(generate_tex_elements(L"\mathrm{sin}\alpha"), 4) + 0.1
+            xpos(generate_tex_elements(L"\mathrm{sin}\alpha"), 4) + 0.1
 
         # No operator space is inserted before an opening delimiter.
         @test xpos(generate_tex_elements(L"\log(x)"), 4) ≈
-              xpos(generate_tex_elements(L"\mathrm{log}(x)"), 4)
+            xpos(generate_tex_elements(L"\mathrm{log}(x)"), 4)
+    end
+
+    @testset "Fraction rule padding" begin
+        elems = generate_tex_elements(L"x^{\frac{1}{1+2}}")
+        rule_end = elems[2][2][1] + elems[2][3] * rightinkbound(elems[2][1])
+        denom_end = maximum(e[2][1] + e[3] * rightinkbound(e[1]) for e in elems[4:6])
+        @test rule_end - denom_end < 0.1
+    end
+
+    @testset "Square root glyph fallback" begin
+        for font_name in keys(MathTeXEngine.default_font_families)
+            elems = generate_tex_elements(L"\sqrt{3}", MathTeXEngine.FontFamily(font_name))
+            @test elems[1][1] isa TeXChar
+            @test elems[1][1].represented_char == '√'
+            @test elems[1][1].glyph_id != 0
+            @test ink_top(elems[2]) ≈ ink_top(elems[1]) atol = 1.0e-6
+
+            empty_elems = generate_tex_elements(L"\sqrt{}", MathTeXEngine.FontFamily(font_name))
+            @test empty_elems[1][1].represented_char == '√'
+            @test empty_elems[1][1].glyph_id != 0
+            @test rightinkbound(empty_elems[2][1]) > 0
+
+            tall_elems = generate_tex_elements(
+                L"\sqrt{x_i^2+y_i^2}",
+                MathTeXEngine.FontFamily(font_name),
+            )
+            @test ink_top(tall_elems[2]) >= maximum(ink_top(e) for e in tall_elems[3:end])
+        end
+    end
+
+    @testset "Missing math symbols use default math fallback" begin
+        for font_name in keys(MathTeXEngine.default_font_families)
+            elems = generate_tex_elements(L"\int_0^1 f(x) dx", MathTeXEngine.FontFamily(font_name))
+            @test elems[1][1] isa TeXChar
+            @test elems[1][1].represented_char == '∫'
+            @test elems[1][1].glyph_id != 0
+        end
+
+        elems = generate_tex_elements(L"\int", MathTeXEngine.FontFamily("NewComputerModern"))
+        @test inkheight(elems[1][1]) < 1.5
     end
 
     @testset "Subscript spacing respects italic overhangs" begin

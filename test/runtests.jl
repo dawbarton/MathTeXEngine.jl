@@ -9,7 +9,7 @@ import MathTeXEngine: tex_layout, generate_tex_elements
 import MathTeXEngine: Space, TeXElement
 import MathTeXEngine: load_font
 import MathTeXEngine: inkheight, inkwidth
-import MathTeXEngine: leftinkbound, rightinkbound
+import MathTeXEngine: bottominkbound, leftinkbound, rightinkbound, topinkbound
 
 include("texexpr.jl")
 include("parser.jl")
