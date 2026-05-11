@@ -19,18 +19,20 @@ const _TALL_SCRIPT_VERTICAL_CLEARANCE = 0.65
 const _TALL_SCRIPT_CORE_OVERLAP = 0.3
 const _SCRIPT_FRACTION_RULE_WIDTH = 0.45
 const _SCRIPT_FRACTION_RULE_SHIFT = 0.18
+const _TALL_SCRIPT_HEIGHT_FACTOR = 1.1
 
 function _script_y_positions(core, sub, super, font_family, sub_shrink, super_shrink)
     xh = xheight(font_family)
     script_gap = max(thickness(font_family), _MIN_SCRIPT_GAP)
+    tall_script_height = _TALL_SCRIPT_HEIGHT_FACTOR * xh
 
-    sub_y = -0.15
-    if inkheight(sub) * sub_shrink > xh
+    sub_y = -0.2
+    if inkheight(sub) * sub_shrink > tall_script_height
         sub_y = min(sub_y, -topinkbound(sub) * sub_shrink - script_gap)
     end
 
-    super_y = 0.85xh
-    if inkheight(super) * super_shrink > xh
+    super_y = xh
+    if inkheight(super) * super_shrink > tall_script_height
         super_y = max(super_y, -bottominkbound(super) * super_shrink + xh + script_gap)
     end
 
@@ -101,7 +103,7 @@ function tex_layout(expr, state)
     head = expr.head
     args = [expr.args...]
     shrink = 0.6
-    italic_correction = state.tex_mode == :inline_math && _italic_correction_enabled[]
+    italic_correction = state.tex_mode == :inline_math && italic_correction_enabled[]
 
     try
         if isleaf(expr)  # :char, :delimiter, :digit, :punctuation, :symbol
@@ -260,7 +262,7 @@ function tex_layout(expr, state)
                 elements = _add_function_spacing(args, elements)
             end
 
-            italic_correction = mode == :inline_math && _italic_correction_enabled[]
+            italic_correction = mode == :inline_math && italic_correction_enabled[]
             return horizontal_layout(elements; italic_correction)
         elseif head == :integral
             pad = 0.1
@@ -294,7 +296,7 @@ function tex_layout(expr, state)
             content = tex_layout(args[1], state)
 
             lw = thickness(font_family)
-            y =  topinkbound(content) - lw
+            y = topinkbound(content) - lw
 
             hline = HLine(inkwidth(content) - 0.15, lw)
 

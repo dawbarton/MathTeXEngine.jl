@@ -313,6 +313,7 @@ Fields
     - elements::Vector{<:TeXElement} Vector of the elements contained in the group.
     - positions::Vector{Point2f} Vector of the relative positions of the contained elements.
     - scales::Vector Vector of the relative scales of the contained elements.
+    - slanted::Bool Whether the group behaves like a slanted element for accent placement.
 """
 struct Group{T} <: TeXElement
     elements::Vector{<:TeXElement}

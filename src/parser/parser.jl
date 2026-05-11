@@ -71,7 +71,7 @@ function push_down!(stack, math_mode = false)
         end
     end
 
-    if _unspace_binary_operators_heuristic_enabled[] && math_mode && head(top) == :spaced
+    if unspace_binary_operators_heuristic_enabled[] && math_mode && head(top) == :spaced
         if !_has_plausible_binary_left_argument(first(stack))
             top = only(top.args)
         end

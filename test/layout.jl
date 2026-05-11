@@ -114,12 +114,12 @@ ink_vmid(element) = (ink_bottom(element) + ink_top(element)) / 2
     end
 
     @testset "Italic boundary correction" begin
-        old = MathTeXEngine._italic_correction_enabled[]
+        old = MathTeXEngine.italic_correction_enabled[]
         try
-            MathTeXEngine._italic_correction_enabled[] = false
+            MathTeXEngine.italic_correction_enabled[] = false
             without = generate_tex_elements(L"(f)x η(t)")
 
-            MathTeXEngine._italic_correction_enabled[] = true
+            MathTeXEngine.italic_correction_enabled[] = true
             with = generate_tex_elements(L"(f)x η(t)")
 
             xpos(elems, i) = elems[i][2][1]
@@ -135,7 +135,7 @@ ink_vmid(element) = (ink_bottom(element) + ink_top(element)) / 2
             @test xpos(with, 7) - xpos(with, 6) < xpos(without, 7) - xpos(without, 6)
             @test xpos(with, 8) - xpos(with, 7) > xpos(without, 8) - xpos(without, 7)
         finally
-            MathTeXEngine._italic_correction_enabled[] = old
+            MathTeXEngine.italic_correction_enabled[] = old
         end
     end
 

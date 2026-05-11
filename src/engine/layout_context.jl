@@ -2,6 +2,9 @@ struct LayoutState
     font_family::FontFamily
     font_modifiers::Vector{Symbol}
     tex_mode::Symbol
+    # Nesting depth of subscript/superscript layout. This lets compact script
+    # contexts use tighter operator spacing and fraction rules than text-style
+    # math, even when the element itself has already been geometrically scaled.
     script_level::Int
 end
 
