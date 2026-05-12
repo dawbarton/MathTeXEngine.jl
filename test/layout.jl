@@ -13,9 +13,11 @@ function test_same_layout(layout1, layout2)
 end
 
 ink_bottom(element) = element[2][2] + element[3] * bottominkbound(element[1])
+ink_left(element) = element[2][1] + element[3] * leftinkbound(element[1])
 ink_right(element) = element[2][1] + element[3] * rightinkbound(element[1])
 ink_top(element) = element[2][2] + element[3] * topinkbound(element[1])
 ink_vmid(element) = (ink_bottom(element) + ink_top(element)) / 2
+ink_group_vmid(elements) = (minimum(ink_bottom, elements) + maximum(ink_top, elements)) / 2
 
 @testset "Layout" begin
     @testset "Decorated" begin
@@ -55,6 +57,10 @@ ink_vmid(element) = (ink_bottom(element) + ink_top(element)) / 2
         super_start = ordinary_elems[3][2][1] +
             ordinary_elems[3][3] * leftinkbound(ordinary_elems[3][1])
         @test sub_start < super_start
+
+        star_elems = generate_tex_elements(L"x^*")
+        @test ink_top(star_elems[2]) > ink_top(star_elems[1])
+        @test ink_bottom(star_elems[2]) < xheight(FontFamily()) + 0.05
     end
 
     @testset "Delimited" begin
@@ -66,8 +72,31 @@ ink_vmid(element) = (ink_bottom(element) + ink_top(element)) / 2
         @test hs[3] >= hs[2]
 
         simple_elems = generate_tex_elements(L"\left(1 + 2\right)")
-        @test ink_vmid(simple_elems[1]) ≈ xheight(FontFamily()) / 2 atol = 0.01
-        @test ink_vmid(simple_elems[end]) ≈ xheight(FontFamily()) / 2 atol = 0.01
+        simple_axis = ink_group_vmid(simple_elems[[2, 4]])
+        @test ink_vmid(simple_elems[1]) ≈ simple_axis atol = 0.01
+        @test ink_vmid(simple_elems[end]) ≈ simple_axis atol = 0.01
+
+        capital_elems = generate_tex_elements(L"\left{A + B\right}")
+        capital_axis = ink_group_vmid(capital_elems[[2, 4]])
+        @test ink_vmid(capital_elems[1]) ≈ capital_axis atol = 0.01
+        @test ink_vmid(capital_elems[end]) ≈ capital_axis atol = 0.01
+
+        fraction_elems = generate_tex_elements(L"\left(\frac{1}{2}\right)")
+        fraction_axis = max(ink_group_vmid(fraction_elems[2:(end - 1)]), xheight(FontFamily()) / 2)
+        @test ink_vmid(fraction_elems[1]) ≈ fraction_axis atol = 0.01
+        @test ink_vmid(fraction_elems[end]) ≈ fraction_axis atol = 0.01
+
+        descender_fraction_elems = generate_tex_elements(L"\left[\frac{a}{b}\right]")
+        @test ink_bottom(descender_fraction_elems[1]) <= ink_bottom(descender_fraction_elems[end - 1])
+        @test ink_top(descender_fraction_elems[1]) >= ink_top(descender_fraction_elems[2])
+
+        greek_brace_fraction_elems = generate_tex_elements(L"\left{\frac{\alpha}{\beta}\right}")
+        @test greek_brace_fraction_elems[1][3] < descender_fraction_elems[1][3]
+
+        nested_elems = generate_tex_elements(L"\left{1 + \left[2 + \left(3 + 4\right)\right]\right}")
+        nested_axis = ink_group_vmid(nested_elems[[2, 5, 8, 10]])
+        nested_delimiters = nested_elems[[1, 4, 7, 11, 12, 13]]
+        @test maximum(abs(ink_vmid(elem) - nested_axis) for elem in nested_delimiters) < 0.015
 
         elems = generate_tex_elements(
             L"\left\langle\left|\left\langle\left|\int\right|\right\rangle\right|\right\rangle",
@@ -150,6 +179,17 @@ ink_vmid(element) = (ink_bottom(element) + ink_top(element)) / 2
             @test MathTeXEngine.is_slanted(with[5][1])
             @test xpos(with, 7) - xpos(with, 6) < xpos(without, 7) - xpos(without, 6)
             @test xpos(with, 8) - xpos(with, 7) > xpos(without, 8) - xpos(without, 7)
+
+            MathTeXEngine.italic_correction_enabled[] = false
+            without = generate_tex_elements(L"k\xi")
+            MathTeXEngine.italic_correction_enabled[] = true
+            with = generate_tex_elements(L"k\xi")
+
+            # Adjacent slanted glyphs can still collide even without a
+            # roman/italic transition. Keep a small ink gap for cases like kξ.
+            @test ink_left(with[2]) - ink_right(with[1]) >
+                ink_left(without[2]) - ink_right(without[1])
+            @test ink_left(with[2]) - ink_right(with[1]) > 0.01
         finally
             MathTeXEngine.italic_correction_enabled[] = old
         end
@@ -209,8 +249,10 @@ ink_vmid(element) = (ink_bottom(element) + ink_top(element)) / 2
         frac_elems = generate_tex_elements(L"\sqrt{\frac{1}{2}}")
         @test ink_bottom(frac_elems[2]) - maximum(ink_top(e) for e in frac_elems[3:end]) >
             xheight(MathTeXEngine.FontFamily()) / 3
+        @test ink_bottom(frac_elems[2]) - maximum(ink_top(e) for e in frac_elems[3:end]) <
+            0.55 * xheight(MathTeXEngine.FontFamily())
         @test minimum(ink_bottom(e) for e in frac_elems[3:end]) - ink_bottom(frac_elems[1]) <
-            0.6 * xheight(MathTeXEngine.FontFamily())
+            xheight(MathTeXEngine.FontFamily())
         @test ink_right(frac_elems[2]) - maximum(ink_right(e) for e in frac_elems[3:end]) <
             0.1
 

@@ -23,6 +23,7 @@ const SPACING_VISUAL_CASES = Pair{String, Vector{String}}[
         raw"\eta(t)",
         raw"\alpha_k",
         raw"\omega_k",
+        raw"k\xi",
         raw"\nu(k)",
         raw"N_\nu L_\nu A_\nu J_\nu",
         raw"x_{\alpha(k)}",

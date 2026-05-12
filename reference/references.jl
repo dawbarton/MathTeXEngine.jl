@@ -84,6 +84,7 @@ inputs["subsuper"] = [
 ]
 
 inputs["symbols"] = [
+    L"k\xi",
     L"\alpha \beta \gamma \delta \epsilon \omega \theta \phi \varphi \psi",
     L"\Gamma \Delta \Omega \Theta \Phi \Psi",
     L"\nabla \rightarrow \neq \leq \hbar",

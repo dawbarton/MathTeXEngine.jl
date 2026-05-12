@@ -23,9 +23,11 @@ const _SCRIPT_FRACTION_RULE_SHIFT = 0.18
 const _TALL_SCRIPT_HEIGHT_FACTOR = 1.5
 const _SCRIPT_SHRINK_HEIGHT_FACTOR = 1.5
 const _SQRT_TALL_CONTENT_CLEARANCE_FACTOR = 0.25
-const _SQRT_RULE_CONTENT_DESCENT = 0.55
+const _SQRT_RULE_CONTENT_DESCENT = 0.9
 const _SQRT_RULE_PADDING = 0.12
+const _SLANTED_ADJACENT_GAP = 0.03
 const _DISPLAY_OPERATOR_DELIMITER_HEIGHT = 1.35
+const _BRACE_RULE_AXIS_PADDING = 0.2
 
 function _script_y_positions(core, sub, super, font_family, sub_shrink, super_shrink)
     xh = xheight(font_family)
@@ -41,6 +43,7 @@ function _script_y_positions(core, sub, super, font_family, sub_shrink, super_sh
     if _has_rule_element(super) || inkheight(super) * super_shrink > tall_script_height
         super_y = max(super_y, -bottominkbound(super) * super_shrink + xh + script_gap)
     end
+    super_y -= max(bottominkbound(super), 0) * super_shrink
 
     if inkheight(core) > _TALL_SCRIPT_CORE_HEIGHT
         sub_top = bottominkbound(core) + _TALL_SCRIPT_VERTICAL_CLEARANCE * xh
@@ -119,6 +122,8 @@ end
 
 const _math_delimiter_chars = Set(['(', ')', '[', ']', '{', '}', '⟨', '⟩', '|', '‖'])
 const _display_operator_chars = Set(['∫', '∑', '∏'])
+const _delimiter_axis_operator_chars =
+    Set(['+', '-', '−', '±', '∓', '×', '⋅', '=', '<', '>', '≤', '≥', '≠'])
 
 function _delimiter_element(char, state)
     font_family = state.font_family
@@ -133,7 +138,11 @@ function _delimiter_element(char, state)
     return TeXChar(char, state, :delimiter)
 end
 
-function _delimiter_target_height(content)
+function _is_brace_delimiter(delimiter)
+    return delimiter isa TeXChar && delimiter.represented_char in ('{', '}')
+end
+
+function _delimiter_target_height(content, content_axis, delimiter, font_family)
     n_visible, elem = _count_visible_nondelimiters(content)
     if n_visible == 1
         if elem isa TeXChar && elem.represented_char in _display_operator_chars
@@ -141,7 +150,22 @@ function _delimiter_target_height(content)
         end
     end
 
-    return inkheight(content)
+    height = inkheight(content)
+    if _has_rule_element(content)
+        axis_height = 2max(
+            content_axis - bottominkbound(content),
+            topinkbound(content) - content_axis,
+        )
+        if _is_brace_delimiter(delimiter)
+            axis_height = min(
+                axis_height,
+                height + _BRACE_RULE_AXIS_PADDING * xheight(font_family),
+            )
+        end
+        return max(height, axis_height)
+    end
+
+    return height
 end
 
 function _count_visible_nondelimiters(elem)
@@ -168,12 +192,55 @@ function _count_visible_nondelimiters(elem)
     return 1, elem
 end
 
-function _delimiter_midline(content, font_family)
-    if _has_rule_element(content) || inkheight(content) > _TALL_SCRIPT_CORE_HEIGHT
-        return vmid(content)
+function _delimiter_visual_bounds(elem)
+    elem isa Space && return nothing
+    elem isa Union{HLine, VLine} && return nothing
+
+    if elem isa TeXChar
+        elem.represented_char in _math_delimiter_chars && return nothing
+        elem.represented_char in _delimiter_axis_operator_chars && return nothing
+        return bottominkbound(elem), topinkbound(elem)
     end
 
-    return xheight(font_family) / 2
+    if elem isa Group
+        bottom = Inf
+        top = -Inf
+        for (child, position, scale) in zip(elem.elements, elem.positions, elem.scales)
+            child_bounds = _delimiter_visual_bounds(child)
+            isnothing(child_bounds) && continue
+
+            child_bottom, child_top = child_bounds
+            bottom = min(bottom, position[2] + scale * child_bottom)
+            top = max(top, position[2] + scale * child_top)
+        end
+
+        isinf(bottom) && return nothing
+        return bottom, top
+    end
+
+    return bottominkbound(elem), topinkbound(elem)
+end
+
+function _delimiter_axis(content, font_family)
+    axis = max(vmid(content), xheight(font_family) / 2)
+    _has_rule_element(content) && return axis
+
+    bounds = _delimiter_visual_bounds(content)
+    isnothing(bounds) && return axis
+
+    visual_axis = (bounds[1] + bounds[2]) / 2
+    return max(axis, visual_axis)
+end
+
+function _sqrt_clearance(content, font_family)
+    xh = xheight(font_family)
+    clearance = _has_rule_element(content) ? xh / 3 : xh / 2
+    return max(thickness(font_family), clearance)
+end
+
+function _sqrt_radical_extra_height(content, font_family)
+    _has_rule_element(content) || return 0.0
+    return _SQRT_TALL_CONTENT_CLEARANCE_FACTOR * xheight(font_family)
 end
 
 """
@@ -270,14 +337,15 @@ function tex_layout(expr, state)
             elements = tex_layout.(args, state)
             left, content, right = elements
 
-            height = _delimiter_target_height(content)
-            left_scale = max(1, height / inkheight(left))
-            right_scale = max(1, height / inkheight(right))
+            content_midline = _delimiter_axis(content, font_family)
+            left_height = _delimiter_target_height(content, content_midline, left, font_family)
+            right_height = _delimiter_target_height(content, content_midline, right, font_family)
+            left_scale = max(1, left_height / inkheight(left))
+            right_scale = max(1, right_height / inkheight(right))
             scales = [left_scale, 1, right_scale]
 
             dxs = hadvance.(elements) .* scales
             xs = [0, cumsum(dxs[1:(end - 1)])...]
-            content_midline = _delimiter_midline(content, font_family)
 
             return Group(
                 elements,
@@ -407,10 +475,8 @@ function tex_layout(expr, state)
             content = tex_layout(args[1], state)
             rule_thickness = thickness(font_family)
             xh = xheight(font_family)
-            clearance = max(rule_thickness, xh / 2)
-            radical_clearance = _has_rule_element(content) ?
-                _SQRT_TALL_CONTENT_CLEARANCE_FACTOR * clearance :
-                0.0
+            clearance = _sqrt_clearance(content, font_family)
+            radical_clearance = _sqrt_radical_extra_height(content, font_family)
             target_height = inkheight(content) + radical_clearance
             radical = _sqrt_radical(state, target_height)
 
@@ -541,7 +607,12 @@ end
 
 function italic_transition_offset(prev, elem)
     (prev isa Space || elem isa Space) && return 0.0
-    is_slanted(prev) == is_slanted(elem) && return 0.0
+
+    if is_slanted(prev) && is_slanted(elem)
+        return slanted_adjacent_offset(prev, elem)
+    elseif !is_slanted(prev) && !is_slanted(elem)
+        return 0.0
+    end
 
     if is_slanted(prev) && !is_slanted(elem)
         height_prev = topinkbound(prev)
@@ -568,6 +639,17 @@ function italic_transition_offset(prev, elem)
     end
 
     return 0.0
+end
+
+function slanted_adjacent_offset(prev, elem)
+    top = min(topinkbound(prev), topinkbound(elem))
+    bottom = max(bottominkbound(prev), bottominkbound(elem))
+    top <= bottom && return 0.0
+
+    gap = hadvance(prev) + leftinkbound(elem) - rightinkbound(prev)
+    min_gap = _SLANTED_ADJACENT_GAP * min(inkheight(prev), inkheight(elem))
+    offset = min_gap - gap
+    return max(0.0, min(offset, 2min_gap))
 end
 
 function layout_text(string, font_family)
