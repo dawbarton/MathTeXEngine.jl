@@ -13,6 +13,7 @@ function test_same_layout(layout1, layout2)
 end
 
 ink_bottom(element) = element[2][2] + element[3] * bottominkbound(element[1])
+ink_right(element) = element[2][1] + element[3] * rightinkbound(element[1])
 ink_top(element) = element[2][2] + element[3] * topinkbound(element[1])
 ink_vmid(element) = (ink_bottom(element) + ink_top(element)) / 2
 
@@ -208,6 +209,10 @@ ink_vmid(element) = (ink_bottom(element) + ink_top(element)) / 2
         frac_elems = generate_tex_elements(L"\sqrt{\frac{1}{2}}")
         @test ink_bottom(frac_elems[2]) - maximum(ink_top(e) for e in frac_elems[3:end]) >
             xheight(MathTeXEngine.FontFamily()) / 3
+        @test minimum(ink_bottom(e) for e in frac_elems[3:end]) - ink_bottom(frac_elems[1]) <
+            xheight(MathTeXEngine.FontFamily()) / 3
+        @test ink_right(frac_elems[2]) - maximum(ink_right(e) for e in frac_elems[3:end]) <
+            0.1
 
         simple_elems = generate_tex_elements(L"\sqrt{b^2 - 4ac}")
         @test ink_bottom(simple_elems[1]) > -0.4

@@ -23,6 +23,7 @@ const _SCRIPT_FRACTION_RULE_SHIFT = 0.18
 const _TALL_SCRIPT_HEIGHT_FACTOR = 1.5
 const _SCRIPT_SHRINK_HEIGHT_FACTOR = 1.5
 const _SQRT_TALL_CONTENT_CLEARANCE_FACTOR = 0.25
+const _SQRT_RULE_CONTENT_DESCENT = 0.3
 const _DISPLAY_OPERATOR_DELIMITER_HEIGHT = 1.35
 
 function _script_y_positions(core, sub, super, font_family, sub_shrink, super_shrink)
@@ -424,10 +425,14 @@ function tex_layout(expr, state)
             radical = _sqrt_radical(state, target_height)
 
             line_top = topinkbound(content) + clearance
+            if _has_rule_element(content)
+                radical_bottom = bottominkbound(content) - _SQRT_RULE_CONTENT_DESCENT * xh
+                line_top = max(line_top, radical_bottom + inkheight(radical))
+            end
             y0 = line_top - topinkbound(radical)
             line_y = line_top - rule_thickness / 2
 
-            hline_width = max(inkwidth(content), xheight(font_family) / 2) + clearance
+            hline_width = max(rightinkbound(content), xheight(font_family) / 2) + rule_thickness
             hline = HLine(hline_width, rule_thickness)
             hline_x = rightinkbound(radical) - rule_thickness / 2
 
