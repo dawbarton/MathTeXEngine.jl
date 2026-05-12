@@ -210,7 +210,7 @@ ink_vmid(element) = (ink_bottom(element) + ink_top(element)) / 2
         @test ink_bottom(frac_elems[2]) - maximum(ink_top(e) for e in frac_elems[3:end]) >
             xheight(MathTeXEngine.FontFamily()) / 3
         @test minimum(ink_bottom(e) for e in frac_elems[3:end]) - ink_bottom(frac_elems[1]) <
-            xheight(MathTeXEngine.FontFamily()) / 3
+            0.6 * xheight(MathTeXEngine.FontFamily())
         @test ink_right(frac_elems[2]) - maximum(ink_right(e) for e in frac_elems[3:end]) <
             0.1
 

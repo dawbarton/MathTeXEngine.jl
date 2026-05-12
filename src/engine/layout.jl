@@ -17,13 +17,14 @@ const _MIN_SCRIPT_GAP = 0.04
 const _TALL_SCRIPT_CORE_HEIGHT = 1.2
 const _TALL_SCRIPT_VERTICAL_CLEARANCE = 0.65
 const _TALL_SCRIPT_CORE_OVERLAP = 0.3
-const _FRACTION_RULE_PADDING = 0.5
+const _FRACTION_RULE_PADDING = 0.65
 const _SCRIPT_FRACTION_RULE_WIDTH = 0.45
 const _SCRIPT_FRACTION_RULE_SHIFT = 0.18
 const _TALL_SCRIPT_HEIGHT_FACTOR = 1.5
 const _SCRIPT_SHRINK_HEIGHT_FACTOR = 1.5
 const _SQRT_TALL_CONTENT_CLEARANCE_FACTOR = 0.25
-const _SQRT_RULE_CONTENT_DESCENT = 0.3
+const _SQRT_RULE_CONTENT_DESCENT = 0.55
+const _SQRT_RULE_PADDING = 0.12
 const _DISPLAY_OPERATOR_DELIMITER_HEIGHT = 1.35
 
 function _script_y_positions(core, sub, super, font_family, sub_shrink, super_shrink)
@@ -432,7 +433,10 @@ function tex_layout(expr, state)
             y0 = line_top - topinkbound(radical)
             line_y = line_top - rule_thickness / 2
 
-            hline_width = max(rightinkbound(content), xheight(font_family) / 2) + rule_thickness
+            hline_width =
+                max(rightinkbound(content), xheight(font_family) / 2) +
+                _SQRT_RULE_PADDING * xh +
+                rule_thickness
             hline = HLine(hline_width, rule_thickness)
             hline_x = rightinkbound(radical) - rule_thickness / 2
 
