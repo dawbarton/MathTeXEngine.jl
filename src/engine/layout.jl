@@ -59,8 +59,8 @@ function _script_shrink(elem, font_family, shrink)
     return is_tall_script ? 0.5 : shrink
 end
 
-function _subscript_x_position(core, sub, font_family, tall_core)
-    script_edge = _has_lowercase_greek(sub) ? max(hadvance(core), rightinkbound(core)) : hadvance(core)
+function _subscript_x_position(core, font_family, tall_core)
+    script_edge = is_slanted(core) ? hadvance(core) : max(hadvance(core), rightinkbound(core))
     if tall_core
         script_edge -= _TALL_SCRIPT_CORE_OVERLAP * xheight(font_family)
     end
@@ -89,16 +89,6 @@ function _has_rule_element(elem)
     elem isa Union{HLine, VLine} && return true
     if elem isa Group
         return any(_has_rule_element, elem.elements)
-    end
-
-    return false
-end
-
-function _has_lowercase_greek(elem)
-    if elem isa TeXChar
-        return is_lowercase_greek(elem.represented_char)
-    elseif elem isa Group
-        return any(_has_lowercase_greek, elem.elements)
     end
 
     return false
@@ -262,7 +252,6 @@ function tex_layout(expr, state)
             end
             sub_x = _subscript_x_position(
                 core,
-                sub,
                 font_family,
                 tall_core,
             )

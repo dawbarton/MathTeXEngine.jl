@@ -245,16 +245,25 @@ ink_vmid(element) = (ink_bottom(element) + ink_top(element)) / 2
         ink_end(element) = element[2][1] + element[3] * rightinkbound(element[1])
 
         font_names = sort(collect(keys(MathTeXEngine.default_font_families)))
-        cases = (L"N_\nu", L"J_\nu", L"x_{\alpha(k)}")
+        for font_name in font_names
+            elems = generate_tex_elements(L"x_{\alpha(k)}", MathTeXEngine.FontFamily(font_name))
+            @test ink_end(elems[1]) - ink_start(elems[2]) < 0.04
+        end
 
-        for font_name in font_names, tex in cases
+        for font_name in font_names, tex in (L"N_\nu", L"J_\nu", L"V_\nu")
             elems = generate_tex_elements(tex, MathTeXEngine.FontFamily(font_name))
+            @test elems[2][2][1] ≈ hadvance(elems[1][1])
+            @test ink_start(elems[2]) < ink_end(elems[1])
+        end
+
+        for tex in (L"\mathrm{N}_\nu", L"\mathrm{J}_\nu")
+            elems = generate_tex_elements(tex)
             @test ink_start(elems[2]) + 0.002 >= ink_end(elems[1])
         end
 
         elems = generate_tex_elements(L"N_\nu L_\nu A_\nu J_\nu")
-        @test ink_start(elems[2]) >= ink_end(elems[1])
-        @test ink_start(elems[8]) >= ink_end(elems[7])
+        @test ink_start(elems[2]) < ink_end(elems[1])
+        @test ink_start(elems[8]) < ink_end(elems[7])
 
         # Issue #95 includes a nested subscript case where the inner `(k)`
         # should stay inside the lower script instead of being squeezed left.
