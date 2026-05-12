@@ -13,18 +13,18 @@ LayoutState(font_family::FontFamily) = LayoutState(font_family, Symbol[])
 LayoutState() = LayoutState(FontFamily())
 
 function Base.show(io::IO, state::LayoutState)
-    print(io, "LayoutState($(state.font_modifiers), $(state.tex_mode), $(state.script_level))")
+    return print(io, "LayoutState($(state.font_modifiers), $(state.tex_mode), $(state.script_level))")
 end
 
 Base.broadcastable(state::LayoutState) = Ref(state)
 
 function change_mode(state::LayoutState, mode)
-    LayoutState(state.font_family, state.font_modifiers, mode, state.script_level)
+    return LayoutState(state.font_family, state.font_modifiers, mode, state.script_level)
 end
 
 function add_font_modifier(state::LayoutState, modifier)
     modifiers = vcat(state.font_modifiers, modifier)
-    LayoutState(state.font_family, modifiers, state.tex_mode, state.script_level)
+    return LayoutState(state.font_family, modifiers, state.tex_mode, state.script_level)
 end
 
 function increase_script_level(state::LayoutState)

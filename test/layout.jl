@@ -9,6 +9,7 @@ function test_same_layout(layout1, layout2)
             test_same_layout(elem1, elem2)
         end
     end
+    return
 end
 
 ink_bottom(element) = element[2][2] + element[3] * bottominkbound(element[1])
@@ -43,6 +44,16 @@ ink_vmid(element) = (ink_bottom(element) + ink_top(element)) / 2
         elems = generate_tex_elements(L"\left(\frac{A^{xy}}{B}\right)^{1/4}")
         @test ink_top(elems[8]) > ink_top(elems[7]) + 0.03
         @test ink_bottom(elems[8]) < ink_top(elems[7])
+
+        @test generate_tex_elements(L"W^{(i+j)}")[2][3] ≈ 0.6
+        @test generate_tex_elements(L"x_{y \rightarrow 0}")[2][3] ≈ 0.6
+
+        ordinary_elems = generate_tex_elements(L"V^1_2")
+        sub_start = ordinary_elems[2][2][1] +
+            ordinary_elems[2][3] * leftinkbound(ordinary_elems[2][1])
+        super_start = ordinary_elems[3][2][1] +
+            ordinary_elems[3][3] * leftinkbound(ordinary_elems[3][1])
+        @test sub_start < super_start
     end
 
     @testset "Delimited" begin
@@ -52,6 +63,10 @@ ink_vmid(element) = (ink_bottom(element) + ink_top(element)) / 2
         hs = inkheight.(layout.elements) .* layout.scales
         @test hs[1] >= hs[2]
         @test hs[3] >= hs[2]
+
+        simple_elems = generate_tex_elements(L"\left(1 + 2\right)")
+        @test ink_vmid(simple_elems[1]) ≈ xheight(FontFamily()) / 2 atol = 0.01
+        @test ink_vmid(simple_elems[end]) ≈ xheight(FontFamily()) / 2 atol = 0.01
 
         elems = generate_tex_elements(
             L"\left\langle\left|\left\langle\left|\int\right|\right\rangle\right|\right\rangle",
@@ -155,6 +170,15 @@ ink_vmid(element) = (ink_bottom(element) + ink_top(element)) / 2
     end
 
     @testset "Fraction rule padding" begin
+        elems = generate_tex_elements(L"\frac{1}{2}")
+        rule_start = elems[1][2][1] + elems[1][3] * leftinkbound(elems[1][1])
+        rule_end = elems[1][2][1] + elems[1][3] * rightinkbound(elems[1][1])
+        numerator_start = elems[2][2][1] + elems[2][3] * leftinkbound(elems[2][1])
+        denominator_end = elems[3][2][1] + elems[3][3] * rightinkbound(elems[3][1])
+        @test numerator_start - rule_start > 0.1
+        @test rule_end - denominator_end > 0.1
+        @test abs((numerator_start - rule_start) - (rule_end - denominator_end)) < 0.05
+
         elems = generate_tex_elements(L"x^{\frac{1}{1+2}}")
         rule_end = elems[2][2][1] + elems[2][3] * rightinkbound(elems[2][1])
         denom_end = maximum(e[2][1] + e[3] * rightinkbound(e[1]) for e in elems[4:6])
@@ -178,8 +202,15 @@ ink_vmid(element) = (ink_bottom(element) + ink_top(element)) / 2
                 L"\sqrt{x_i^2+y_i^2}",
                 MathTeXEngine.FontFamily(font_name),
             )
-            @test ink_top(tall_elems[2]) >= maximum(ink_top(e) for e in tall_elems[3:end])
+            @test ink_bottom(tall_elems[2]) >= maximum(ink_top(e) for e in tall_elems[3:end])
         end
+
+        frac_elems = generate_tex_elements(L"\sqrt{\frac{1}{2}}")
+        @test ink_bottom(frac_elems[2]) - maximum(ink_top(e) for e in frac_elems[3:end]) >
+            xheight(MathTeXEngine.FontFamily()) / 3
+
+        simple_elems = generate_tex_elements(L"\sqrt{b^2 - 4ac}")
+        @test ink_bottom(simple_elems[1]) > -0.4
     end
 
     @testset "Missing math symbols use default math fallback" begin
@@ -191,7 +222,17 @@ ink_vmid(element) = (ink_bottom(element) + ink_top(element)) / 2
         end
 
         elems = generate_tex_elements(L"\int", MathTeXEngine.FontFamily("NewComputerModern"))
-        @test inkheight(elems[1][1]) < 1.5
+        @test inkheight(elems[1][1]) > 2.0
+
+        nested_elems = generate_tex_elements(
+            L"\left\langle\left|\int\right|\right\rangle",
+            MathTeXEngine.FontFamily("NewComputerModern"),
+        )
+        @test all(e -> e[1].glyph_id != 0, nested_elems)
+        @test nested_elems[3][3] == 1
+        @test nested_elems[1][3] < 1.5
+        @test abs(ink_vmid(nested_elems[1]) - ink_vmid(nested_elems[3])) < 0.05
+        @test abs(ink_vmid(nested_elems[2]) - ink_vmid(nested_elems[3])) < 0.05
     end
 
     @testset "Subscript spacing respects italic overhangs" begin

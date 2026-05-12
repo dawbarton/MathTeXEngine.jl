@@ -1,5 +1,5 @@
 _latex_to_new_computer_modern = Dict(
-    raw"\int" => 878,
+    raw"\int" => 5930,
     raw"\sum" => 5941,
 
     raw"\partial" => 3377,
@@ -44,5 +44,5 @@ end
 # Special case : get hbar from the italic font
 _symbol_to_new_computer_modern['ħ'] = (
     joinpath("NewComputerModern", "NewCM10-Italic.otf"),
-    231
+    231,
 )

@@ -7,8 +7,8 @@ using MathTeXEngine
 const SPACING_VISUAL_FONT_NAMES =
     ["NewComputerModern", "TeXGyreHeros", "TeXGyrePagella", "LucioleMath"]
 
-const SPACING_VISUAL_CASES = Pair{String,Vector{String}}[
-    "Issue #142: italic/roman boundaries"=>[
+const SPACING_VISUAL_CASES = Pair{String, Vector{String}}[
+    "Issue #142: italic/roman boundaries" => [
         raw"f(t)",
         raw"g(x)",
         raw"(f)x",
@@ -19,7 +19,7 @@ const SPACING_VISUAL_CASES = Pair{String,Vector{String}}[
         raw"\mathrm{y}(x)",
         raw"\mathrm{g}t",
     ],
-    "Issue #95: lower-case Greek and subscript spacing"=>[
+    "Issue #95: lower-case Greek and subscript spacing" => [
         raw"\eta(t)",
         raw"\alpha_k",
         raw"\omega_k",
@@ -30,10 +30,11 @@ const SPACING_VISUAL_CASES = Pair{String,Vector{String}}[
         raw"\partial_i u_j",
         raw"\phi_\varphi \rho_\sigma",
     ],
-    "Subscript and superscript combinations"=>[
+    "Subscript and superscript combinations" => [
         raw"x_i",
         raw"x^i",
         raw"x_i^j",
+        raw"V^i_j",
         raw"x_{i_j}",
         raw"x^{i^j}",
         raw"x_{(a+b)_k}^i",
@@ -41,7 +42,7 @@ const SPACING_VISUAL_CASES = Pair{String,Vector{String}}[
         raw"\Gamma^\mu_{\nu\rho}",
         raw"\psi^\dagger_i\psi_i",
     ],
-    "PR #151: primes and deep scripts"=>[
+    "PR #151: primes and deep scripts" => [
         raw"x' f'",
         raw"x'' f''",
         raw"x′ f′",
@@ -51,7 +52,7 @@ const SPACING_VISUAL_CASES = Pair{String,Vector{String}}[
         raw"A^{B^{C^{D^E}}}_{F_{G_{H_I}}}",
         raw"f^{A'}",
     ],
-    "Roman/upright and capital boundaries"=>[
+    "Roman/upright and capital boundaries" => [
         raw"\mathrm{d}x",
         raw"\mathrm{e}^{-x}",
         raw"\mathrm{Re}\,z",
@@ -61,7 +62,7 @@ const SPACING_VISUAL_CASES = Pair{String,Vector{String}}[
         raw"A_\nu B_\nu C_\nu D_\nu",
         raw"M\mathrm{M}M",
     ],
-    "Issue #129: math operator spacing"=>[
+    "Issue #129: math operator spacing" => [
         raw"\log x",
         raw"\log(x)",
         raw"\sin x",
@@ -70,7 +71,7 @@ const SPACING_VISUAL_CASES = Pair{String,Vector{String}}[
         raw"\exp(t)",
         raw"\max_{t \in \{1,...,5\}}",
     ],
-    "Operators, delimiters, and fractions"=>[
+    "Operators, delimiters, and fractions" => [
         raw"-1,\ 2-1,\ (-1)",
         raw"\alpha^*",
         raw"\psi^* \psi",
@@ -81,7 +82,7 @@ const SPACING_VISUAL_CASES = Pair{String,Vector{String}}[
         raw"\sum_{k=0}^n a_k x^k",
         raw"\int_0^{2\pi}\sin(x)\,dx",
     ],
-    "Script layout issues #93, #105, #110, #126"=>[
+    "Script layout issues #93, #105, #110, #126" => [
         raw"\left(\frac{dy}{dx}\right)_0",
         raw"\left(\frac{A^{xy}}{B}\right)^{1/4}",
         raw"(\frac{A^{xy}}{B})^{1/4}",
@@ -90,7 +91,7 @@ const SPACING_VISUAL_CASES = Pair{String,Vector{String}}[
         raw"x^{\frac{1}{1+2}}",
         raw"x_{\frac{1}{1+2}}",
     ],
-    "Nested expressions"=>[
+    "Nested expressions" => [
         raw"\frac{\alpha_i+\beta_i}{\gamma_i+\delta_i}",
         raw"\sqrt{\frac{1+\alpha_k}{1+\beta_k}}",
         raw"F_{\mu\nu}F^{\mu\nu}",
@@ -116,21 +117,24 @@ spacing_baseline_ref() = get(ENV, "MTE_SPACING_BASELINE_REF", "HEAD")
 font_latex(font_name, expr) = latexstring("\\fontfamily{$font_name}$expr")
 
 function spacing_label_sheet(
-    cases = SPACING_VISUAL_CASES;
-    font_names = SPACING_VISUAL_FONT_NAMES,
-)
+        cases = SPACING_VISUAL_CASES;
+        font_names = SPACING_VISUAL_FONT_NAMES,
+    )
+    row_height = 68
+    row_gap = 7
     nrows = sum(length(last(group)) + 1 for group in cases) + 1
-    fig = Figure(size = (2200, max(900, 54nrows)), fontsize = 18)
+    fig_height = row_height * nrows + row_gap * (nrows - 1)
+    fig = Figure(size = (2200, max(900, fig_height)), fontsize = 18)
 
     Label(fig[1, 1], "case"; tellwidth = false, halign = :left, font = :bold)
     for (col, font_name) in enumerate(font_names)
-        Label(fig[1, col+1], font_name; tellwidth = false, halign = :left, font = :bold)
+        Label(fig[1, col + 1], font_name; tellwidth = false, halign = :left, font = :bold)
     end
 
     row = 2
     for (group, exprs) in cases
         Label(
-            fig[row, 1:(length(font_names)+1)],
+            fig[row, 1:(length(font_names) + 1)],
             group;
             tellwidth = false,
             halign = :left,
@@ -143,7 +147,7 @@ function spacing_label_sheet(
             Label(fig[row, 1], expr; tellwidth = false, halign = :left, fontsize = 13)
             for (col, font_name) in enumerate(font_names)
                 Label(
-                    fig[row, col+1],
+                    fig[row, col + 1],
                     font_latex(font_name, expr);
                     tellwidth = false,
                     halign = :left,
@@ -155,10 +159,13 @@ function spacing_label_sheet(
     end
 
     colsize!(fig.layout, 1, Relative(0.22))
-    for col = 2:(length(font_names)+1)
+    for col in 2:(length(font_names) + 1)
         colsize!(fig.layout, col, Relative(0.78 / length(font_names)))
     end
-    rowgap!(fig.layout, 7)
+    for row in 1:nrows
+        rowsize!(fig.layout, row, Fixed(row_height))
+    end
+    rowgap!(fig.layout, row_gap)
     return fig
 end
 
@@ -180,12 +187,12 @@ function render_spacing_sheet_in_subprocess(package_path, output_path)
         joinpath(project_dir, "Manifest.toml"),
     )
     script = """
-        import Pkg
-        Pkg.develop(path=$(repr(package_path)))
-        Pkg.instantiate()
-        include($(repr(@__FILE__)))
-        save_spacing_label_sheet($(repr(output_path)))
-        """
+    import Pkg
+    Pkg.develop(path=$(repr(package_path)))
+    Pkg.instantiate()
+    include($(repr(@__FILE__)))
+    save_spacing_label_sheet($(repr(output_path)))
+    """
     run(`$julia_executable --project=$project_dir -e $script`)
     return output_path
 end
@@ -230,7 +237,7 @@ function spacing_overlay_image(after_path, before_path)
     width = min(size(after_img, 2), size(before_img, 2))
     overlay = Matrix{RGBAf}(undef, height, width)
 
-    for y = 1:height, x = 1:width
+    for y in 1:height, x in 1:width
         after_dark = pixel_darkness(after_img[y, x])
         before_dark = pixel_darkness(before_img[y, x])
 

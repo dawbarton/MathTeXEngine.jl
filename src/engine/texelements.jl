@@ -84,14 +84,14 @@ xheight(x::TeXElement) = 0
 
 Return the horizontal middle of the element ink.
 """
-hmid(x::TeXElement) = 0.5*(leftinkbound(x) + rightinkbound(x))
+hmid(x::TeXElement) = 0.5 * (leftinkbound(x) + rightinkbound(x))
 
 """
     vmid(elem::TeXElement)
 
 Return the vertical middle of the element ink.
 """
-vmid(x::TeXElement) = 0.5*(bottominkbound(x) + topinkbound(x))
+vmid(x::TeXElement) = 0.5 * (bottominkbound(x) + topinkbound(x))
 
 """
     inkwidth(elem::TeXElement)
@@ -192,7 +192,7 @@ is_lowercase_greek(char) =
     char == 'ϱ' ||
     char == 'ϖ'
 
-function TeXChar(name::AbstractString, state::LayoutState, char_type ; represented='?')
+function TeXChar(name::AbstractString, state::LayoutState, char_type; represented = '?')
     font_family = state.font_family
     font_id = get_font_identifier(state, char_type)
     font = get_font(font_family, font_id)
@@ -274,10 +274,10 @@ end
 
 VLine(height, thickness) = VLine(promote(height, thickness)...)
 
-leftinkbound(line::VLine) = -line.thickness/2
-rightinkbound(line::VLine) = line.thickness/2
-bottominkbound(line::VLine{T}) where T = min(line.height, zero(T))
-topinkbound(line::VLine{T}) where T = max(line.height, zero(T))
+leftinkbound(line::VLine) = -line.thickness / 2
+rightinkbound(line::VLine) = line.thickness / 2
+bottominkbound(line::VLine{T}) where {T} = min(line.height, zero(T))
+topinkbound(line::VLine{T}) where {T} = max(line.height, zero(T))
 
 """
     Hline
@@ -296,10 +296,10 @@ end
 
 HLine(height, thickness) = HLine(promote(height, thickness)...)
 
-leftinkbound(line::HLine{T}) where T = min(line.width, zero(T))
-rightinkbound(line::HLine{T}) where T = max(line.width, zero(T))
-bottominkbound(line::HLine) = -line.thickness/2
-topinkbound(line::HLine) = line.thickness/2
+leftinkbound(line::HLine{T}) where {T} = min(line.width, zero(T))
+rightinkbound(line::HLine{T}) where {T} = max(line.width, zero(T))
+bottominkbound(line::HLine) = -line.thickness / 2
+topinkbound(line::HLine) = line.thickness / 2
 
 """
     Group
