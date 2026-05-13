@@ -22,9 +22,8 @@ const _SCRIPT_FRACTION_RULE_WIDTH = 0.45
 const _SCRIPT_FRACTION_RULE_SHIFT = 0.18
 const _TALL_SCRIPT_HEIGHT_FACTOR = 1.5
 const _SCRIPT_SHRINK_HEIGHT_FACTOR = 1.5
-const _SQRT_TALL_CONTENT_CLEARANCE_FACTOR = 0.25
-const _SQRT_RULE_CONTENT_DESCENT = 0.9
 const _SQRT_RULE_PADDING = 0.12
+const _SQRT_RADICAL_VERTICAL_TOLERANCE = 0.35
 const _SLANTED_ADJACENT_GAP = 0.03
 const _DISPLAY_OPERATOR_DELIMITER_HEIGHT = 1.35
 const _BRACE_RULE_AXIS_PADDING = 0.2
@@ -97,7 +96,7 @@ function _has_rule_element(elem)
     return false
 end
 
-function _sqrt_radical(state, target_height)
+function _sqrt_radicals(state)
     font_family = state.font_family
     radicals = TeXElement[TeXChar('√', state, :symbol)]
 
@@ -109,15 +108,24 @@ function _sqrt_radical(state, target_height)
         isnothing(fallback) || push!(radicals, fallback)
     end
 
-    sort!(radicals; by = inkheight)
-    for candidate in radicals
-        if candidate.glyph_id == 0
-            continue
+    return sort!(filter(candidate -> candidate.glyph_id != 0, radicals); by = inkheight)
+end
+
+function _sqrt_radical(state, line_top, content_bottom)
+    radicals = _sqrt_radicals(state)
+    tolerance = _SQRT_RADICAL_VERTICAL_TOLERANCE * xheight(state.font_family)
+
+    fallback = last(radicals)
+    for radical in radicals
+        radical_bottom = line_top - inkheight(radical)
+        if radical_bottom <= content_bottom + tolerance
+            fallback = radical
+            radical_bottom >= content_bottom - tolerance && return radical
+            break
         end
-        inkheight(candidate) >= target_height && return candidate
     end
 
-    return last(radicals)
+    return fallback
 end
 
 const _math_delimiter_chars = Set(['(', ')', '[', ']', '{', '}', '⟨', '⟩', '|', '‖'])
@@ -236,11 +244,6 @@ function _sqrt_clearance(content, font_family)
     xh = xheight(font_family)
     clearance = _has_rule_element(content) ? xh / 3 : xh / 2
     return max(thickness(font_family), clearance)
-end
-
-function _sqrt_radical_extra_height(content, font_family)
-    _has_rule_element(content) || return 0.0
-    return _SQRT_TALL_CONTENT_CLEARANCE_FACTOR * xheight(font_family)
 end
 
 """
@@ -476,15 +479,8 @@ function tex_layout(expr, state)
             rule_thickness = thickness(font_family)
             xh = xheight(font_family)
             clearance = _sqrt_clearance(content, font_family)
-            radical_clearance = _sqrt_radical_extra_height(content, font_family)
-            target_height = inkheight(content) + radical_clearance
-            radical = _sqrt_radical(state, target_height)
-
             line_top = topinkbound(content) + clearance
-            if _has_rule_element(content)
-                radical_bottom = bottominkbound(content) - _SQRT_RULE_CONTENT_DESCENT * xh
-                line_top = max(line_top, radical_bottom + inkheight(radical))
-            end
+            radical = _sqrt_radical(state, line_top, bottominkbound(content))
             y0 = line_top - topinkbound(radical)
             line_y = line_top - rule_thickness / 2
 
