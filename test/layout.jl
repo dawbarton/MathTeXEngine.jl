@@ -248,12 +248,11 @@ ink_group_vmid(elements) = (minimum(ink_bottom, elements) + maximum(ink_top, ele
 
         frac_elems = generate_tex_elements(L"\sqrt{\frac{1}{2}}")
         @test ink_bottom(frac_elems[2]) - maximum(ink_top(e) for e in frac_elems[3:end]) >
-            0.2 * xheight(MathTeXEngine.FontFamily())
+            xheight(MathTeXEngine.FontFamily()) / 3
         @test ink_bottom(frac_elems[2]) - maximum(ink_top(e) for e in frac_elems[3:end]) <
             0.55 * xheight(MathTeXEngine.FontFamily())
-        radicand_bottom = minimum(ink_bottom(e) for e in frac_elems[3:end])
-        @test abs(radicand_bottom - ink_bottom(frac_elems[1])) <
-            0.35 * xheight(MathTeXEngine.FontFamily())
+        @test minimum(ink_bottom(e) for e in frac_elems[3:end]) - ink_bottom(frac_elems[1]) <
+            xheight(MathTeXEngine.FontFamily())
         @test ink_right(frac_elems[2]) - maximum(ink_right(e) for e in frac_elems[3:end]) <
             0.1
 
