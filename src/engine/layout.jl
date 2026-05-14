@@ -416,7 +416,7 @@ function tex_layout(expr, state)
             end
 
             if mode == :inline_math
-                elements = _add_function_spacing(args, elements)
+                elements = _add_math_operator_spacing(args, elements)
             end
 
             italic_correction = mode == :inline_math && italic_correction_enabled[]
@@ -567,12 +567,12 @@ function horizontal_layout(elements; italic_correction = false)
     return Group(elements, Point2f.(xs, 0); slanted = is_slanted(last(elements)))
 end
 
-function _add_function_spacing(args, elements)
+function _add_math_operator_spacing(args, elements)
     spaced = TeXElement[]
 
     for (i, elem) in enumerate(elements)
         push!(spaced, elem)
-        if args[i].head == :function && _function_takes_space(args, i)
+        if _is_spaced_math_operator(args[i]) && _operator_takes_space(args, i)
             push!(spaced, Space(1 / 6))
         end
     end
@@ -580,9 +580,15 @@ function _add_function_spacing(args, elements)
     return spaced
 end
 
-function _function_takes_space(args, i)
+function _operator_takes_space(args, i)
     next = findnext(arg -> !(arg.head == :char && only(arg.args) == ' '), args, i + 1)
     return !isnothing(next) && !_is_opening_delimiter(args[next])
+end
+
+function _is_spaced_math_operator(arg)
+    arg isa TeXExpr || return false
+    arg.head == :function && return true
+    return arg.head in (:decorated, :underover) && _is_spaced_math_operator(first(arg.args))
 end
 
 function _is_opening_delimiter(expr)

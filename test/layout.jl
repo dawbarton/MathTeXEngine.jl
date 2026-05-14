@@ -197,6 +197,7 @@ ink_group_vmid(elements) = (minimum(ink_bottom, elements) + maximum(ink_top, ele
 
     @testset "Function spacing" begin
         xpos(elems, i) = elems[i][2][1]
+        inline_layout(expr) = tex_layout(texparse(expr), FontFamily()).elements[1]
 
         # Issue #129: LaTeX inserts a thin space after math operators when
         # the argument is not parenthesized.
@@ -204,10 +205,13 @@ ink_group_vmid(elements) = (minimum(ink_bottom, elements) + maximum(ink_top, ele
             xpos(generate_tex_elements(L"\mathrm{log}x"), 4) + 0.1
         @test xpos(generate_tex_elements(L"\sin\alpha"), 4) >
             xpos(generate_tex_elements(L"\mathrm{sin}\alpha"), 4) + 0.1
+        @test inline_layout(L"\inf_x\tan(x)").elements[2] == Space(1 / 6)
+        @test inline_layout(L"\sup_x\tan(x)").elements[2] == Space(1 / 6)
 
         # No operator space is inserted before an opening delimiter.
         @test xpos(generate_tex_elements(L"\log(x)"), 4) ≈
             xpos(generate_tex_elements(L"\mathrm{log}(x)"), 4)
+        @test !(inline_layout(L"\inf_x(\tan(x))").elements[2] isa Space)
     end
 
     @testset "Fraction rule padding" begin
