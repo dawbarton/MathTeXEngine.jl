@@ -22,13 +22,13 @@ _latex_to_new_computer_modern = Dict(
 _symbol_to_new_computer_modern = Dict{Char, Tuple{String, Int}}()
 cmmath_fontpath = joinpath("NewComputerModern", "NewCMMath-Regular.otf")
 
-for (symbol,  glyph_id) in _latex_to_new_computer_modern
+for (symbol, glyph_id) in _latex_to_new_computer_modern
     if haskey(latex_symbols, symbol)
         symbol = latex_symbols[symbol][1]
     else
         symbol = symbol[1]
     end
-    
+
     _symbol_to_new_computer_modern[symbol] = (cmmath_fontpath, glyph_id)
 end
 
@@ -44,5 +44,5 @@ end
 # Special case : get hbar from the italic font
 _symbol_to_new_computer_modern['ħ'] = (
     joinpath("NewComputerModern", "NewCM10-Italic.otf"),
-    231
+    231,
 )

@@ -59,7 +59,7 @@ end
 
 show_stack(stack) = show_stack(stdout, stack)
 
-function push_down!(stack)
+function push_down!(stack, math_mode = false)
     top = pop!(stack)
     if head(top) == :group
         # Replace empty groups by 0 spaces
@@ -70,6 +70,13 @@ function push_down!(stack)
             top = only(top.args)
         end
     end
+
+    if unspace_binary_operators_heuristic_enabled[] && math_mode && head(top) == :spaced
+        if !_has_plausible_binary_left_argument(first(stack))
+            top = only(top.args)
+        end
+    end
+
     push!(first(stack), top)
 
     if head(first(stack)) in [:subscript, :superscript]
@@ -79,10 +86,10 @@ function push_down!(stack)
         push!(first(stack).args, decorated)
     end
 
-    conclude_command!!(stack)
+    conclude_command!!(stack, math_mode)
 end
 
-function conclude_command!!(stack)
+function conclude_command!!(stack, math_mode = false)
     com = first(stack)
     head(com) != :command && return false
     nargs = length(com.args) - 1
@@ -90,7 +97,7 @@ function conclude_command!!(stack)
     if required_args(first(com.args)) == nargs
         pop!(stack)
         push!(stack, command_expr(com.args[1], com.args[2:end]))
-        push_down!(stack)
+        push_down!(stack, math_mode)
     end
 end
 
@@ -151,7 +158,7 @@ function texparse(tex ; root = TeXExpr(:lines), showdebug = false)
             if token == dollar
                 if head(first(stack)) == :inline_math
                     inside_math = false
-                    push_down!(stack)
+                    push_down!(stack, true)
                 else
                     inside_math = true
                     push!(stack, TeXExpr(:inline_math))
@@ -161,7 +168,7 @@ function texparse(tex ; root = TeXExpr(:lines), showdebug = false)
                     throw(TeXParseError("unexpected new line", stack, length(tex), tex))
                 end
 
-                push_down!(stack)
+                push_down!(stack, inside_math)
                 push!(stack, TeXExpr(:line))
             elseif token == lcurly
                 push!(stack, TeXExpr(:group))
@@ -169,7 +176,7 @@ function texparse(tex ; root = TeXExpr(:lines), showdebug = false)
                 if head(first(stack)) != :group
                     throw(TeXParseError("missing closing '}'", stack, pos, tex))
                 end
-                push_down!(stack)
+                push_down!(stack, inside_math)
             elseif token == left
                 push!(stack, TeXExpr(:delimited, delimiter(raw"\left", tex[pos:pos+len-1])))
             elseif token == right
@@ -189,7 +196,7 @@ function texparse(tex ; root = TeXExpr(:lines), showdebug = false)
             elseif token == command
                 com_str = tex[pos:pos+len-1]
                 push!(stack, TeXExpr(:command, [com_str]))
-                conclude_command!!(stack)
+                conclude_command!!(stack, inside_math)
             elseif token == underscore || token == caret || token == primes
                 dec = (token == underscore) ? :subscript : :superscript
 
@@ -229,7 +236,7 @@ function texparse(tex ; root = TeXExpr(:lines), showdebug = false)
                     expr = canonical_expr(c)
                 end
                 push!(stack, expr)
-                push_down!(stack)
+                push_down!(stack, inside_math)
             end
         catch err
             throw(TeXParseError("unexpected error", stack, pos, tex))
@@ -237,7 +244,7 @@ function texparse(tex ; root = TeXExpr(:lines), showdebug = false)
     end
 
     if head(first(stack)) == :line
-        push_down!(stack)
+        push_down!(stack, inside_math)
     end
 
     if length(stack) > 1
@@ -250,4 +257,18 @@ function texparse(tex ; root = TeXExpr(:lines), showdebug = false)
     else
         return lines
     end
+end
+
+function _has_plausible_binary_left_argument(expr)
+    if head(expr) in
+       (:punctuation, :space, :function, :integral, :underover, :superscript, :subscript)
+        return false
+    elseif head(expr) == :delimiter
+        return !(length(expr.args) == 1 && expr.args[1] in ('(', '[', '⟨', '{'))
+    elseif head(expr) in (:line, :inline_math, :group, :delimited)
+        isempty(expr.args) && return false
+        return _has_plausible_binary_left_argument(last(expr.args))
+    end
+
+    return true
 end

@@ -250,6 +250,42 @@ end
                     (:char, 'd')))
     end
 
+    @testset "Unary operator spacing heuristic" begin
+        old = MathTeXEngine.unspace_binary_operators_heuristic_enabled[]
+        try
+            MathTeXEngine.unspace_binary_operators_heuristic_enabled[] = true
+
+            test_parse(raw"$-1$", (:inline_math, (:symbol, '−'), (:digit, '1')))
+            test_parse(raw"$2-1$",
+                       (:inline_math,
+                        (:digit, '2'),
+                        (:spaced, (:symbol, '−')),
+                        (:digit, '1')))
+            test_parse(raw"$\alpha^*$",
+                       (:inline_math,
+                        (:decorated, (:symbol, 'α'), nothing, (:symbol, '*'))))
+            test_parse(raw"$\frac{1}{2}\pm\sqrt{3}$",
+                       (:inline_math,
+                        (:frac, (:digit, '1'), (:digit, '2')),
+                        (:spaced, (:symbol, '±')),
+                        (:sqrt, (:digit, '3'))))
+            test_parse(raw"$\frac{1}{2}{}\pm\sqrt{3}$",
+                       (:inline_math,
+                        (:frac, (:digit, '1'), (:digit, '2')),
+                        (:space, 0.0),
+                        (:symbol, '±'),
+                        (:sqrt, (:digit, '3'))))
+
+            MathTeXEngine.unspace_binary_operators_heuristic_enabled[] = false
+            test_parse(raw"$-1$", (:inline_math, (:spaced, (:symbol, '−')), (:digit, '1')))
+            test_parse(raw"$\alpha^*$",
+                       (:inline_math,
+                        (:decorated, (:symbol, 'α'), nothing, (:spaced, (:symbol, '*')))))
+        finally
+            MathTeXEngine.unspace_binary_operators_heuristic_enabled[] = old
+        end
+    end
+
     @testset "Subscript and superscript" begin
         @test texparse(raw"a^2_3") == texparse(raw"a_3^2")
         @test texparse(raw"^7_b") == texparse(raw"{}^7_b")

@@ -47,7 +47,7 @@ Base.pop!(texexpr::TeXExpr) = pop!(texexpr.args)
 Base.copy(texexpr::TeXExpr) = TeXExpr(texexpr.head, deepcopy(texexpr.args))
 
 function Base.Char(texexpr::TeXExpr)
-    if texexpr.head in [:char, :symbol, :digit]
+    if isleaf(texexpr)
         return texexpr.args[1]
     end
 
@@ -77,7 +77,7 @@ function manual_texexpr(tuple::Tuple)
     head = tuple[1]
     args = []
 
-    if head in [:char, :digit, :symbol]
+    if head in [:char, :delimiter, :digit, :punctuation, :symbol]
         return TeXExpr(head, tuple[2])
     end
 

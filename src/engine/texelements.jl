@@ -84,14 +84,14 @@ xheight(x::TeXElement) = 0
 
 Return the horizontal middle of the element ink.
 """
-hmid(x::TeXElement) = 0.5*(leftinkbound(x) + rightinkbound(x))
+hmid(x::TeXElement) = 0.5 * (leftinkbound(x) + rightinkbound(x))
 
 """
     vmid(elem::TeXElement)
 
 Return the vertical middle of the element ink.
 """
-vmid(x::TeXElement) = 0.5*(bottominkbound(x) + topinkbound(x))
+vmid(x::TeXElement) = 0.5 * (bottominkbound(x) + topinkbound(x))
 
 """
     inkwidth(elem::TeXElement)
@@ -148,34 +148,63 @@ struct TeXChar <: TeXElement
     represented_char::Char
 end
 
+function default_math_glyph(char_or_name)
+    font = load_font(_default_fonts[:math])
+    return glyph_index(font, char_or_name), font
+end
+
+function default_math_texchar(char_or_name, font_family, represented::Char)
+    glyph_id, font = default_math_glyph(char_or_name)
+    glyph_id == 0 && return nothing
+    return TeXChar(glyph_id, font, font_family, false, represented)
+end
+
 function TeXChar(char::Char, state::LayoutState, char_type)
     font_family = state.font_family
 
     if haskey(font_family.special_chars, char)
         fontpath, id = font_family.special_chars[char]
         font = load_font(fontpath)
-        return TeXChar(id, font, font_family, false, char)
+        return TeXChar(id, font, font_family, is_slanted_math_symbol(char, char_type), char)
     end
 
-    font = get_font(state, char_type)
+    font_id = get_font_identifier(state, char_type)
+    font = get_font(font_family, font_id)
 
-    return TeXChar(
-        glyph_index(font, char),
-        font,
-        font_family,
-        is_slanted(state.font_family, char_type),
-        char)
+    glyph_id = glyph_index(font, char)
+    if glyph_id == 0 && char_type in (:delimiter, :symbol)
+        fallback = default_math_texchar(char, font_family, char)
+        if !isnothing(fallback)
+            return fallback
+        end
+    end
+
+    return TeXChar(glyph_id, font, font_family, is_slanted_font(font_id), char)
 end
 
-function TeXChar(name::AbstractString, state::LayoutState, char_type ; represented='?')
+is_slanted_math_symbol(char, char_type) = char_type == :symbol && is_lowercase_greek(char)
+is_lowercase_greek(char) =
+    'α' <= char <= 'ω' ||
+    char == 'ϕ' ||
+    char == 'ϵ' ||
+    char == 'ϑ' ||
+    char == 'ϰ' ||
+    char == 'ϱ' ||
+    char == 'ϖ'
+
+function TeXChar(name::AbstractString, state::LayoutState, char_type; represented = '?')
     font_family = state.font_family
-    font = get_font(state, char_type)
+    font_id = get_font_identifier(state, char_type)
+    font = get_font(font_family, font_id)
+    glyph_id = glyph_index(font, name)
+
     return TeXChar(
-        glyph_index(font, name),
+        glyph_id,
         font,
         font_family,
-        is_slanted(state.font_family, char_type),
-        represented)
+        is_slanted_font(font_id),
+        represented,
+    )
 end
 
 for inkfunc in (:leftinkbound, :rightinkbound, :bottominkbound, :topinkbound)
@@ -245,10 +274,10 @@ end
 
 VLine(height, thickness) = VLine(promote(height, thickness)...)
 
-leftinkbound(line::VLine) = -line.thickness/2
-rightinkbound(line::VLine) = line.thickness/2
-bottominkbound(line::VLine{T}) where T = min(line.height, zero(T))
-topinkbound(line::VLine{T}) where T = max(line.height, zero(T))
+leftinkbound(line::VLine) = -line.thickness / 2
+rightinkbound(line::VLine) = line.thickness / 2
+bottominkbound(line::VLine{T}) where {T} = min(line.height, zero(T))
+topinkbound(line::VLine{T}) where {T} = max(line.height, zero(T))
 
 """
     Hline
@@ -267,10 +296,10 @@ end
 
 HLine(height, thickness) = HLine(promote(height, thickness)...)
 
-leftinkbound(line::HLine{T}) where T = min(line.width, zero(T))
-rightinkbound(line::HLine{T}) where T = max(line.width, zero(T))
-bottominkbound(line::HLine) = -line.thickness/2
-topinkbound(line::HLine) = line.thickness/2
+leftinkbound(line::HLine{T}) where {T} = min(line.width, zero(T))
+rightinkbound(line::HLine{T}) where {T} = max(line.width, zero(T))
+bottominkbound(line::HLine) = -line.thickness / 2
+topinkbound(line::HLine) = line.thickness / 2
 
 """
     Group
@@ -284,14 +313,21 @@ Fields
     - elements::Vector{<:TeXElement} Vector of the elements contained in the group.
     - positions::Vector{Point2f} Vector of the relative positions of the contained elements.
     - scales::Vector Vector of the relative scales of the contained elements.
+    - slanted::Bool Whether the group behaves like a slanted element for accent placement.
 """
 struct Group{T} <: TeXElement
     elements::Vector{<:TeXElement}
     positions::Vector{Point2f}
     scales::Vector{T}
+    slanted::Bool
 end
 
-Group(elements, positions) = Group(elements, positions, ones(length(elements)))
+Group(elements, positions, scales; slanted = false) =
+    Group(elements, positions, scales, slanted)
+Group(elements, positions; slanted = false) =
+    Group(elements, positions, ones(length(elements)); slanted)
+
+is_slanted(g::Group) = g.slanted
 
 xpositions(g::Group) = [p[1] for p in g.positions]
 ypositions(g::Group) = [p[2] for p in g.positions]
@@ -334,4 +370,4 @@ end
 xheight(g::Group) = maximum(xheight.(g.elements) .* g.scales)
 
 leftmost_glyph(g::Group) = leftmost_glyph(first(g.elements))
-rightmost_glyph(g::Group) = rightmost_glyph(last(glyph))
+rightmost_glyph(g::Group) = rightmost_glyph(last(g.elements))
