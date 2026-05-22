@@ -24,6 +24,19 @@ function download_refimages(tag = "refimages-v2")
     return images
 end
 
+function image_paths(references)
+    paths = String[]
+    for (group, data) in references
+        if data isa AbstractDict
+            append!(paths, joinpath.(Ref(group), image_paths(data)))
+        else
+            push!(paths, "$group.png")
+        end
+    end
+
+    return paths
+end
+
 @testset "Reference images" begin
     @info "Reference test started"
 
@@ -41,9 +54,9 @@ end
     path = mkpath(reference_comparison_images)
 
     @info "Comparing images"
-    for group in keys(inputs)
-        refimg = load(joinpath(reference_images, "$group.png"))
-        img = load(joinpath(comparison_images, "$group.png"))
+    for image_path in image_paths(REFERENCES)
+        refimg = load(joinpath(reference_images, image_path))
+        img = load(joinpath(comparison_images, image_path))
 
         if img != refimg
             @info "Saving the reference comparison for '$group'."
