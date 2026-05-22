@@ -42,11 +42,13 @@ end
 
     @info "Downloading reference images"
     reference_images = download_refimages()
+    @inof "Reference images downloaded in $reference_images"
     
     @info "Generating comparison images"
     comparison_images = joinpath(@__DIR__, "comparison_images")
     rm(comparison_images, recursive = true, force = true)
     generate(comparison_images)
+    @info "Comparison images generated in $comparison_images"
     
     # Compare
     reference_comparison_images = joinpath(@__DIR__, "reference_comparison_images")
@@ -55,6 +57,8 @@ end
 
     @info "Comparing images"
     for image_path in image_paths(REFERENCES)
+        @info "Comparing $image_path"
+
         refimg = load(joinpath(reference_images, image_path))
         img = load(joinpath(comparison_images, image_path))
 
