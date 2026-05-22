@@ -59,7 +59,7 @@ end
         img = load(joinpath(comparison_images, image_path))
 
         if img != refimg
-            @info "Saving the reference comparison for '$group'."
+            @info "Saving the reference comparison for '$image_path'."
             fig = Figure()
             fig[1, 1] = Label(fig, "Reference", tellwidth=false)
             axref = fig[2, 1] = Axis(fig, aspect=DataAspect())
@@ -69,7 +69,7 @@ end
             axcurrent = fig[2, 2] = Axis(fig, aspect=DataAspect())
             image!(axcurrent, rotr90(img))
 
-            save(joinpath(path, "$group.png"), fig)
+            save(joinpath(path, image_path), fig)
         end
         @test img == refimg
     end
