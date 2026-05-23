@@ -7,7 +7,7 @@ using TOML
 
 include("references.jl")
 
-function download_refimages(tag = "refimages-v2")
+function download_refimages(tag = "refimages-v3")
     url = "https://github.com/Kolaru/MathTeXEngine.jl/releases/download/$tag/reference_images.tar"
     images_tar = joinpath(@__DIR__, "reference_images.tar")
     images = joinpath(@__DIR__, "reference_images")
@@ -42,7 +42,7 @@ end
 
     @info "Downloading reference images"
     reference_images = download_refimages()
-    @inof "Reference images downloaded in $reference_images"
+    @info "Reference images downloaded in $reference_images"
     
     @info "Generating comparison images"
     comparison_images = joinpath(@__DIR__, "comparison_images")
@@ -73,7 +73,9 @@ end
             axcurrent = fig[2, 2] = Axis(fig, aspect=DataAspect())
             image!(axcurrent, rotr90(img))
 
-            save(joinpath(path, image_path), fig)
+            comparison_path = joinpath(path, image_path)
+            mkpath(dirname(comparison_path))
+            save(comparison_path, fig)
         end
         @test img == refimg
     end
