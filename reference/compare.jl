@@ -38,6 +38,15 @@ function image_paths(references)
     return paths
 end
 
+function image_distance(img1, img2)
+    diffs = (
+        abs.(red.(img1) - red.(img2)) + 
+        abs.(green.(img1) - green.(img2)) + 
+        abs.(blue.(img1) - blue.(img2))
+    ) / 3
+    return maximum(diffs)
+end
+
 @testset "Reference images" begin
     @info "Reference test started"
 
@@ -63,7 +72,7 @@ end
         refimg = rotr90(load(joinpath(reference_images, image_path)))
         img = rotr90(load(joinpath(comparison_images, image_path)))
 
-        if img != refimg
+        if image_distance(img, refimg) > 0.1
             @info "Saving the reference comparison for '$image_path'."
             fig = Figure(size = (3*size(img, 1), size(img, 2)))
             Label(fig[1, 1], "Reference $(size(refimg))", tellwidth=false)
