@@ -39,13 +39,10 @@ function image_paths(references)
 end
 
 function image_distance(img1, img2)
-    diffs = (
-        abs.(red.(img1) - red.(img2)) + 
-        abs.(green.(img1) - green.(img2)) + 
-        abs.(blue.(img1) - blue.(img2))
-    ) / 3
-    return maximum(diffs)
+    return maximum(image_difference(img1, img2)) ./ 100
 end
+
+image_difference(img1, img2) = colordiff.(img1, img2)
 
 @testset "Reference images" begin
     @info "Reference test started"
@@ -73,38 +70,28 @@ end
         img = rotr90(load(joinpath(comparison_images, image_path)))
 
         if image_distance(img, refimg) > 0.1
-            @info "Saving the reference comparison for '$image_path'."
+            @info "Saving the reference comparison for '$image_path' (image difference $(image_distance(img, refimg)))"
             fig = Figure(size = (3*size(img, 1), size(img, 2)))
             Label(fig[1, 1], "Reference $(size(refimg))", tellwidth=false)
-            axref = Axis(fig[2, 1], aspect=DataAspect())
+            axref = Axis(fig[2, 1], aspect = DataAspect())
             hidedecorations!(axref)
             image!(axref, refimg)
 
             Label(fig[1, 2], "Current $(size(img))", tellwidth=false)
-            axcurrent = Axis(fig[2, 2], aspect=DataAspect())
+            axcurrent = Axis(fig[2, 2], aspect = DataAspect())
             hidedecorations!(axcurrent)
             image!(axcurrent, img)
 
             if size(img) == size(refimg)
-                overlayed = fill(colorant"white", size(img))
-                for i in axes(img, 1)
-                    for j in axes(img, 2)
-                        overlayed[i, j] = RGB(
-                            convert(Gray, img[i, j]),
-                            convert(Gray, refimg[i, j]),
-                            1.0
-                        )
-                    end
-                end
-
-                Label(fig[1, 3], "Overlayed (reference in teal, current in magenta)", tellwidth=false)
-                axoverlayed = Axis(fig[2, 3], aspect=DataAspect())
-                hidedecorations!(axoverlayed)
-                image!(axoverlayed, overlayed)
+                Label(fig[1, 3], "Image difference (maximum difference $(float(image_distance(img, refimg))))", tellwidth=false)
+                axdiff = Axis(fig[2, 3], aspect = DataAspect())
+                hidedecorations!(axdiff)
+                image!(axdiff, 1 .- image_difference(img, refimg))
             end
 
             comparison_path = joinpath(path, image_path)
             mkpath(dirname(comparison_path))
+            @info "Saving the reference plot at $comparison_path"
             save(comparison_path, fig)
         end
         @test img == refimg
