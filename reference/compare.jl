@@ -1,4 +1,5 @@
 using CairoMakie
+using Colors
 using FileIO
 using MathTeXEngine
 using Tar
