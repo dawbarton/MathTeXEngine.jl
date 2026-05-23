@@ -59,19 +59,39 @@ end
     for image_path in image_paths(REFERENCES)
         @info "Comparing $image_path"
 
-        refimg = load(joinpath(reference_images, image_path))
-        img = load(joinpath(comparison_images, image_path))
+        refimg = rotr90(load(joinpath(reference_images, image_path)))
+        img = rotr90(load(joinpath(comparison_images, image_path)))
 
         if img != refimg
             @info "Saving the reference comparison for '$image_path'."
-            fig = Figure()
-            fig[1, 1] = Label(fig, "Reference", tellwidth=false)
-            axref = fig[2, 1] = Axis(fig, aspect=DataAspect())
-            image!(axref, rotr90(refimg))
+            fig = Figure(size = (3*size(img, 1), size(img, 2)))
+            Label(fig[1, 1], "Reference $(size(refimg))", tellwidth=false)
+            axref = Axis(fig[2, 1], aspect=DataAspect())
+            hidedecorations!(axref)
+            image!(axref, refimg)
 
-            fig[1, 2] = Label(fig, "Current", tellwidth=false)
-            axcurrent = fig[2, 2] = Axis(fig, aspect=DataAspect())
-            image!(axcurrent, rotr90(img))
+            Label(fig[1, 2], "Current $(size(img))", tellwidth=false)
+            axcurrent = Axis(fig[2, 2], aspect=DataAspect())
+            hidedecorations!(axcurrent)
+            image!(axcurrent, img)
+
+            if size(img) == size(refimg)
+                overlayed = fill(colorant"white", size(img))
+                for i in axes(img, 1)
+                    for j in axes(img, 2)
+                        overlayed[i, j] = RGB(
+                            convert(Gray, img[i, j]),
+                            convert(Gray, refimg[i, j]),
+                            1.0
+                        )
+                    end
+                end
+
+                Label(fig[1, 3], "Overlayed (reference in teal, current in magenta)", tellwidth=false)
+                axoverlayed = Axis(fig[2, 3], aspect=DataAspect())
+                hidedecorations!(axoverlayed)
+                image!(axoverlayed, overlayed)
+            end
 
             comparison_path = joinpath(path, image_path)
             mkpath(dirname(comparison_path))
