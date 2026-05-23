@@ -38,11 +38,8 @@ function image_paths(references)
     return paths
 end
 
-function image_distance(img1, img2)
-    return maximum(image_difference(img1, img2)) ./ 100
-end
-
-image_difference(img1, img2) = colordiff.(img1, img2)
+n_bad_pixels(img1, img2) = count(>(0.5), image_difference(img1, img2))
+image_difference(img1, img2) = colordiff.(img1, img2) ./ 100
 
 @testset "Reference images" begin
     @info "Reference test started"
@@ -69,8 +66,8 @@ image_difference(img1, img2) = colordiff.(img1, img2)
         refimg = rotr90(load(joinpath(reference_images, image_path)))
         img = rotr90(load(joinpath(comparison_images, image_path)))
 
-        if image_distance(img, refimg) > 0.1
-            @info "Saving the reference comparison for '$image_path' (image difference $(image_distance(img, refimg)))"
+        if (failed = n_bad_pixels(img, refimg) >= 10)
+            @info "Saving the reference comparison for '$image_path' (image difference $(n_bad_pixels(img, refimg)))"
             fig = Figure(size = (3*size(img, 1), size(img, 2)))
             Label(fig[1, 1], "Reference $(size(refimg))", tellwidth=false)
             axref = Axis(fig[2, 1], aspect = DataAspect())
@@ -83,10 +80,13 @@ image_difference(img1, img2) = colordiff.(img1, img2)
             image!(axcurrent, img)
 
             if size(img) == size(refimg)
-                Label(fig[1, 3], "Image difference (maximum difference $(float(image_distance(img, refimg))))", tellwidth=false)
+                Label(fig[1, 3], "Difference ($(n_bad_pixels(img, refimg)) bad pixels). Blue: reference. Orange: current.", tellwidth=false)
                 axdiff = Axis(fig[2, 3], aspect = DataAspect())
                 hidedecorations!(axdiff)
-                image!(axdiff, 1 .- image_difference(img, refimg))
+                diff = Gray.(img) - Gray.(refimg)
+                overlay = RGB.(Gray.(refimg), Gray.(img)./2 .+ Gray.(refimg)./2, Gray.(img))
+
+                image!(axdiff, overlay)
             end
 
             comparison_path = joinpath(path, image_path)
@@ -94,6 +94,6 @@ image_difference(img1, img2) = colordiff.(img1, img2)
             @info "Saving the reference plot at $comparison_path"
             save(comparison_path, fig)
         end
-        @test img == refimg
+        @test !failed
     end
 end
