@@ -7,7 +7,7 @@ using TOML
 
 include("references.jl")
 
-function download_refimages(tag = "refimages-v3")
+function download_refimages(tag = "refimages-v2")
     url = "https://github.com/Kolaru/MathTeXEngine.jl/releases/download/$tag/reference_images.tar"
     images_tar = joinpath(@__DIR__, "reference_images.tar")
     images = joinpath(@__DIR__, "reference_images")
