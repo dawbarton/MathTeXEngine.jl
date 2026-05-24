@@ -20,7 +20,7 @@ const SUPPORTED_FONTS = [
 ]
 
 function generate(destination_folder, references = REFERENCES, fonts = SUPPORTED_FONTS)
-    @info "Generating reference images in folder $destination_folder"
+    @info "Generating images in folder $destination_folder"
 
     path = mkpath(destination_folder)
     failures = Dict()
