@@ -1,4 +1,14 @@
 const FONTS = RelocatableFolders.@path joinpath(@__DIR__, "..", "..", "assets", "fonts")
+# joinpath() (and its ispath() check) becomes expensive when repeated for every
+# ascender, descender and TeXChar
+const FONTNAME_TO_FULLPATH = Dict{String, String}()
+
+function full_fontpath(fontname::String)
+    isfile(fontname) && return fontname
+    return get!(FONTNAME_TO_FULLPATH, fontname) do
+        return joinpath(FONTS, fontname)
+    end
+end
 
 function full_fontpath(fontname::AbstractString)
     isfile(fontname) && return fontname
@@ -92,7 +102,7 @@ function FontFamily(fonts ;
         thickness = 0.0375)
 
     fonts = merge(_default_fonts, Dict(fonts))
-    
+
     return FontFamily(
         fonts,
         font_mapping,
@@ -235,7 +245,7 @@ scenario.
 """
 function texfont(font_desc=:text)
     family = FontFamily()
-    
+
     haskey(family.fonts, font_desc) && return load_font(family.fonts[font_desc])
     haskey(family.font_mapping, font_desc) && return load_font(family.fonts[family.font_mapping[font_desc]])
 
