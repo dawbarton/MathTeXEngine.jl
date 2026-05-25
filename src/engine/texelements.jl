@@ -332,24 +332,39 @@ is_slanted(g::Group) = g.slanted
 xpositions(g::Group) = [p[1] for p in g.positions]
 ypositions(g::Group) = [p[2] for p in g.positions]
 
+has_ink(::TeXElement) = true
+has_ink(::Space) = false
+has_ink(g::Group) = any(has_ink, g.elements)
+
+function _group_bound(g::Group, bound, coordinate, combine)
+    result = 0.0
+    found_ink = false
+
+    for (elem, position, scale) in zip(g.elements, g.positions, g.scales)
+        has_ink(elem) || continue
+
+        child_bound = Float64(position[coordinate] + scale * bound(elem))::Float64
+        result = found_ink ? combine(result, child_bound) : child_bound
+        found_ink = true
+    end
+
+    return found_ink ? result : 0.0
+end
+
 function leftinkbound(g::Group)
-    lefts = leftinkbound.(g.elements) .* g.scales .+ xpositions(g)
-    return minimum(lefts)
+    return _group_bound(g, leftinkbound, 1, min)
 end
 
 function rightinkbound(g::Group)
-    rights = rightinkbound.(g.elements) .* g.scales .+ xpositions(g)
-    return maximum(rights)
+    return _group_bound(g, rightinkbound, 1, max)
 end
 
 function bottominkbound(g::Group)
-    bottoms = bottominkbound.(g.elements) .* g.scales .+ ypositions(g)
-    return minimum(bottoms)
+    return _group_bound(g, bottominkbound, 2, min)
 end
 
 function topinkbound(g::Group)
-    tops = topinkbound.(g.elements) .* g.scales .+ ypositions(g)
-    return maximum(tops)
+    return _group_bound(g, topinkbound, 2, max)
 end
 
 function hadvance(g::Group)
@@ -358,13 +373,27 @@ function hadvance(g::Group)
 end
 
 function ascender(g::Group)
-    asc = ypositions(g) .+ ascender.(g.elements) .* g.scales
-    return maximum(asc)
+    asc = topinkbound(g)
+    for (elem, position, scale) in zip(g.elements, g.positions, g.scales)
+        has_ink(elem) || continue
+        iszero(position[2]) || continue
+        child_ascender = Float64(scale * ascender(elem))::Float64
+        asc = max(asc, child_ascender)
+    end
+
+    return asc
 end
 
 function descender(g::Group)
-    des = ypositions(g) .+ descender.(g.elements) .* g.scales
-    return minimum(des)
+    des = bottominkbound(g)
+    for (elem, position, scale) in zip(g.elements, g.positions, g.scales)
+        has_ink(elem) || continue
+        iszero(position[2]) || continue
+        child_descender = Float64(scale * descender(elem))::Float64
+        des = min(des, child_descender)
+    end
+
+    return des
 end
 
 xheight(g::Group) = maximum(xheight.(g.elements) .* g.scales)

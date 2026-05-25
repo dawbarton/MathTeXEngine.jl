@@ -6,6 +6,7 @@ const SPACING = Dict(
         raw"(t)",
         raw"\eta(t)",
         raw"\alpha(t)",
+        raw"W(\alpha,\alpha^*)",
         raw"g(f(x))",
         raw"\mathrm{y}(x)",
         raw"\mathrm{g}t",

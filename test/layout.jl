@@ -20,6 +20,21 @@ ink_vmid(element) = (ink_bottom(element) + ink_top(element)) / 2
 ink_group_vmid(elements) = (minimum(ink_bottom, elements) + maximum(ink_top, elements)) / 2
 
 @testset "Layout" begin
+    @testset "Group ink bounds" begin
+        @test rightinkbound(Space(1.2)) == 1.2
+
+        trailing_space_layout = tex_layout(texparse(raw"x\;"), FontFamily())
+        @test rightinkbound(trailing_space_layout) < hadvance(trailing_space_layout)
+        @test rightinkbound(trailing_space_layout) ≈ rightinkbound(trailing_space_layout.elements[1])
+
+        internal_space_layout = tex_layout(texparse(raw"x\;y"), FontFamily())
+        @test rightinkbound(internal_space_layout) >
+            internal_space_layout.positions[2][1] + rightinkbound(internal_space_layout.elements[2])
+
+        digit = tex_layout(manual_texexpr((:digit, '2')), FontFamily())
+        @test MathTeXEngine.ascender(digit) > topinkbound(digit)
+    end
+
     @testset "Decorated" begin
         expr = manual_texexpr((:decorated, 'x', 'b', 't'))
         layout = tex_layout(expr, FontFamily())
@@ -190,6 +205,28 @@ ink_group_vmid(elements) = (minimum(ink_bottom, elements) + maximum(ink_top, ele
             @test ink_left(with[2]) - ink_right(with[1]) >
                 ink_left(without[2]) - ink_right(without[1])
             @test ink_left(with[2]) - ink_right(with[1]) > 0.01
+
+            MathTeXEngine.italic_correction_enabled[] = false
+            without = generate_tex_elements(L"2ab")
+            MathTeXEngine.italic_correction_enabled[] = true
+            with = generate_tex_elements(L"2ab")
+
+            # Digit-letter juxtaposition represents implicit multiplication,
+            # not a delimiter boundary, so keep the natural digit-to-italic gap
+            # while still applying adjacent slanted-glyph correction to ab.
+            @test ink_left(with[2]) - ink_right(with[1]) ≈
+                ink_left(without[2]) - ink_right(without[1])
+            @test ink_left(with[3]) - ink_right(with[2]) > 0.01
+
+            MathTeXEngine.italic_correction_enabled[] = false
+            without = generate_tex_elements(L"W(\alpha,\alpha^*)")
+            MathTeXEngine.italic_correction_enabled[] = true
+            with = generate_tex_elements(L"W(\alpha,\alpha^*)")
+
+            # Punctuation in multi-argument labels should keep the natural
+            # breathing room before the next italic/Greek argument.
+            @test ink_left(with[5]) - ink_right(with[4]) ≈
+                ink_left(without[5]) - ink_right(without[4]) atol = 1.0e-6
         finally
             MathTeXEngine.italic_correction_enabled[] = old
         end
@@ -259,6 +296,27 @@ ink_group_vmid(elements) = (minimum(ink_bottom, elements) + maximum(ink_top, ele
             xheight(MathTeXEngine.FontFamily())
         @test ink_right(frac_elems[2]) - maximum(ink_right(e) for e in frac_elems[3:end]) <
             0.1
+
+        sqrt_layout = tex_layout(texparse(raw"\sqrt{\frac{1}{2}}"), FontFamily()).elements[1]
+        @test rightinkbound(sqrt_layout) < hadvance(sqrt_layout)
+        @test sqrt_layout.positions[2][1] + rightinkbound(sqrt_layout.elements[2]) ≈
+            rightinkbound(sqrt_layout)
+
+        followed_sqrt_layout = tex_layout(texparse(raw"\sqrt{\frac{1}{2}}\sin(x)"), FontFamily())
+        @test followed_sqrt_layout.positions[2][1] ≈ hadvance(sqrt_layout)
+
+        simple_sqrt_layout = tex_layout(texparse(raw"\sqrt{2}"), FontFamily()).elements[1]
+        @test MathTeXEngine.ascender(simple_sqrt_layout) ≈ topinkbound(simple_sqrt_layout)
+
+        ylabel_layout = tex_layout(
+            texparse(L"x + y - \sin(x) × \tan(y) + \sqrt{2}"),
+            FontFamily(),
+        ).elements[1]
+        @test MathTeXEngine.ascender(ylabel_layout) ≈ topinkbound(ylabel_layout)
+
+        wide_frac_elems = generate_tex_elements(L"\sqrt{\frac{1+6}{4+a+g}}")
+        @test ink_bottom(wide_frac_elems[2]) - maximum(ink_top(e) for e in wide_frac_elems[3:end]) >
+            0.4 * xheight(MathTeXEngine.FontFamily())
 
         simple_elems = generate_tex_elements(L"\sqrt{b^2 - 4ac}")
         @test ink_bottom(simple_elems[1]) > -0.4

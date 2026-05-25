@@ -25,6 +25,7 @@ const _SCRIPT_SHRINK_HEIGHT_FACTOR = 1.5
 const _SQRT_TALL_CONTENT_CLEARANCE_FACTOR = 0.25
 const _SQRT_RULE_CONTENT_DESCENT = 0.9
 const _SQRT_RULE_PADDING = 0.12
+const _SQRT_TRAILING_PADDING = 0.06
 const _SLANTED_ADJACENT_GAP = 0.03
 const _DISPLAY_OPERATOR_DELIMITER_HEIGHT = 1.35
 const _BRACE_RULE_AXIS_PADDING = 0.2
@@ -234,7 +235,7 @@ end
 
 function _sqrt_clearance(content, font_family)
     xh = xheight(font_family)
-    clearance = _has_rule_element(content) ? xh / 3 : xh / 2
+    clearance = xh / 2
     return max(thickness(font_family), clearance)
 end
 
@@ -494,14 +495,19 @@ function tex_layout(expr, state)
                 rule_thickness
             hline = HLine(hline_width, rule_thickness)
             hline_x = rightinkbound(radical) - rule_thickness / 2
+            hline_right = hline_x + rightinkbound(hline)
+            content_right = rightinkbound(content)
+            target_hadvance = hline_right + _SQRT_TRAILING_PADDING * xh
+            trailing_space_x = min(content_right, target_hadvance)
+            trailing_space = target_hadvance - trailing_space_x
 
             return Group(
-                [radical, hline, content, Space(1.2)],
+                [radical, hline, content, Space(trailing_space)],
                 Point2f[
                     (0, y0),
                     (hline_x, line_y),
                     (rightinkbound(radical), 0),
-                    (rightinkbound(content), 0),
+                    (trailing_space_x, 0),
                 ],
             )
         elseif head == :text
@@ -641,11 +647,17 @@ function italic_transition_offset(prev, elem)
 
         # Positive left bearings on italic glyphs make e.g. "(t)" look
         # asymmetric. Remove that extra font-side gap at roman-to-italic edges.
+        prev isa TeXChar && _preserves_italic_left_bearing(prev) && return 0.0
         return -bearing
     end
 
     return 0.0
 end
+
+_preserves_italic_left_bearing(char::TeXChar) =
+    isdigit(char.represented_char) || _is_math_punctuation(char.represented_char)
+
+_is_math_punctuation(char) = char in (',', ';', '.', '!')
 
 function slanted_adjacent_offset(prev, elem)
     top = min(topinkbound(prev), topinkbound(elem))
