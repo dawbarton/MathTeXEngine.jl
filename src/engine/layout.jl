@@ -23,7 +23,10 @@ const _SCRIPT_FRACTION_RULE_SHIFT = 0.18
 const _TALL_SCRIPT_HEIGHT_FACTOR = 1.5
 const _SCRIPT_SHRINK_HEIGHT_FACTOR = 1.5
 const _SQRT_TALL_CONTENT_CLEARANCE_FACTOR = 0.25
-const _SQRT_RULE_CONTENT_DESCENT = 0.9
+const _SQRT_RULE_CONTENT_DESCENT = 0.25
+const _SQRT_TALL_CONTENT_DESCENT = 0.25
+const _SQRT_TALL_CONTENT_HEIGHT = 1.75
+const _SQRT_MAX_RADICAL_STRETCH = 1.25
 const _SQRT_RULE_PADDING = 0.12
 const _SQRT_TRAILING_PADDING = 0.06
 const _SLANTED_ADJACENT_GAP = 0.03
@@ -118,6 +121,9 @@ end
 
 function _default_sqrt_radical_variants(font_family)
     radicals = TeXElement[]
+    radical = default_math_texchar('√', font_family, '√')
+    isnothing(radical) || push!(radicals, radical)
+
     for radical_name in first(_sqrt_radical_name_sets)
         radical = default_math_texchar(radical_name, font_family, '√')
         isnothing(radical) || push!(radicals, radical)
@@ -128,29 +134,51 @@ function _default_sqrt_radical_variants(font_family)
 end
 
 function _select_sqrt_radical(radicals, target_height)
+    previous = nothing
     for candidate in radicals
-        inkheight(candidate) >= target_height && return candidate
+        if inkheight(candidate) >= target_height
+            if !isnothing(previous)
+                stretch = target_height / inkheight(previous)
+                stretch <= _SQRT_MAX_RADICAL_STRETCH && return previous, stretch
+            end
+
+            return candidate, 1.0
+        end
+
+        previous = candidate
     end
 
-    return isempty(radicals) ? nothing : last(radicals)
+    return isempty(radicals) ? nothing : (last(radicals), 1.0)
 end
 
-function _sqrt_radical(state, target_height, content)
+function _sqrt_radical_candidates(state, content)
     fallback_radicals = _default_sqrt_radical_variants(state.font_family)
     if !_has_rule_element(content)
-        radical = _select_sqrt_radical(fallback_radicals, target_height)
-        isnothing(radical) || return radical
+        if _is_tall_sqrt_content(content, state.font_family)
+            return filter(radical -> inkheight(radical) > 1, fallback_radicals)
+        end
+
+        return fallback_radicals
     end
 
     native_radicals = _sqrt_radical_variants(state)
-    radical = _select_sqrt_radical(native_radicals, target_height)
+    isempty(native_radicals) || return native_radicals
+
+    return fallback_radicals
+end
+
+function _sqrt_radical(state, target_height, content)
+    radical = _select_sqrt_radical(_sqrt_radical_candidates(state, content), target_height)
     isnothing(radical) || return radical
 
-    radical = _select_sqrt_radical(fallback_radicals, target_height)
+    radical = _select_sqrt_radical(_default_sqrt_radical_variants(state.font_family), target_height)
     isnothing(radical) || return radical
 
     throw(ArgumentError("No square-root radical glyph found"))
 end
+
+_is_tall_sqrt_content(content, font_family) =
+    topinkbound(content) > _SQRT_TALL_CONTENT_HEIGHT * xheight(font_family)
 
 const _math_delimiter_chars = Set(['(', ')', '[', ']', '{', '}', '⟨', '⟩', '|', '‖'])
 const _display_operator_chars = Set(['∫', '∑', '∏'])
@@ -518,16 +546,23 @@ function tex_layout(expr, state)
             rule_thickness = thickness(font_family)
             xh = xheight(font_family)
             clearance = _sqrt_clearance(content, font_family)
-            radical_clearance = _sqrt_radical_extra_height(content, font_family)
-            target_height = inkheight(content) + radical_clearance
-            radical = _sqrt_radical(state, target_height, content)
-
             line_top = topinkbound(content) + clearance
             if _has_rule_element(content)
-                radical_bottom = bottominkbound(content) - _SQRT_RULE_CONTENT_DESCENT * xh
-                line_top = max(line_top, radical_bottom + inkheight(radical))
+                desired_bottom = bottominkbound(content) - _SQRT_RULE_CONTENT_DESCENT * xh
+                target_height = max(inkheight(content), line_top - desired_bottom)
+            elseif _is_tall_sqrt_content(content, font_family)
+                desired_bottom = bottominkbound(content) - _SQRT_TALL_CONTENT_DESCENT * xh
+                target_height = max(inkheight(content), line_top - desired_bottom)
+            else
+                target_height = inkheight(content)
             end
-            y0 = line_top - topinkbound(radical)
+            radical, radical_scale = _sqrt_radical(state, target_height, content)
+
+            if _has_rule_element(content)
+                radical_bottom = bottominkbound(content) - _SQRT_RULE_CONTENT_DESCENT * xh
+                line_top = max(line_top, radical_bottom + radical_scale * inkheight(radical))
+            end
+            y0 = line_top - radical_scale * topinkbound(radical)
             line_y = line_top - rule_thickness / 2
 
             hline_width =
@@ -535,7 +570,8 @@ function tex_layout(expr, state)
                 _SQRT_RULE_PADDING * xh +
                 rule_thickness
             hline = HLine(hline_width, rule_thickness)
-            hline_x = rightinkbound(radical) - rule_thickness / 2
+            radical_right = radical_scale * rightinkbound(radical)
+            hline_x = radical_right - rule_thickness / 2
             hline_right = hline_x + rightinkbound(hline)
             content_right = rightinkbound(content)
             target_hadvance = hline_right + _SQRT_TRAILING_PADDING * xh
@@ -547,9 +583,10 @@ function tex_layout(expr, state)
                 Point2f[
                     (0, y0),
                     (hline_x, line_y),
-                    (rightinkbound(radical), 0),
+                    (radical_right, 0),
                     (trailing_space_x, 0),
                 ],
+                [radical_scale, 1, 1, 1],
             )
         elseif head == :text
             modifier, content = args
