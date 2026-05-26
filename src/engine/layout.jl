@@ -100,7 +100,7 @@ end
 
 function _sqrt_radical(state, target_height)
     font_family = state.font_family
-    radicals = TeXElement[TeXChar('√', state, :symbol)]
+    radicals = TeXElement[]
 
     for radical_name in ("radical.v1", "radical.v2", "radical.v3", "radical.v4")
         candidate = TeXChar(radical_name, state, :symbol; represented = '√')
@@ -112,9 +112,6 @@ function _sqrt_radical(state, target_height)
 
     sort!(radicals; by = inkheight)
     for candidate in radicals
-        if candidate.glyph_id == 0
-            continue
-        end
         inkheight(candidate) >= target_height && return candidate
     end
 
