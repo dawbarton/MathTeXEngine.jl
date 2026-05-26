@@ -98,24 +98,58 @@ function _has_rule_element(elem)
     return false
 end
 
-function _sqrt_radical(state, target_height)
-    font_family = state.font_family
+const _sqrt_radical_name_sets = (
+    ("radical.v1", "radical.v2", "radical.v3", "radical.v4", "radical.v5", "radical.v6"),
+    ("sqrt.v1", "sqrt.v2", "sqrt.v3", "sqrt.v4"),
+)
+
+function _sqrt_radical_variants(state)
     radicals = TeXElement[]
-
-    for radical_name in ("radical.v1", "radical.v2", "radical.v3", "radical.v4")
-        candidate = TeXChar(radical_name, state, :symbol; represented = '√')
-        candidate.glyph_id != 0 && push!(radicals, candidate)
-
-        fallback = default_math_texchar(radical_name, font_family, '√')
-        isnothing(fallback) || push!(radicals, fallback)
+    for radical_names in _sqrt_radical_name_sets
+        for radical_name in radical_names
+            candidate = TeXChar(radical_name, state, :symbol; represented = '√')
+            candidate.glyph_id != 0 && push!(radicals, candidate)
+        end
     end
 
     sort!(radicals; by = inkheight)
+    return radicals
+end
+
+function _default_sqrt_radical_variants(font_family)
+    radicals = TeXElement[]
+    for radical_name in first(_sqrt_radical_name_sets)
+        radical = default_math_texchar(radical_name, font_family, '√')
+        isnothing(radical) || push!(radicals, radical)
+    end
+
+    sort!(radicals; by = inkheight)
+    return radicals
+end
+
+function _select_sqrt_radical(radicals, target_height)
     for candidate in radicals
         inkheight(candidate) >= target_height && return candidate
     end
 
-    return last(radicals)
+    return isempty(radicals) ? nothing : last(radicals)
+end
+
+function _sqrt_radical(state, target_height, content)
+    fallback_radicals = _default_sqrt_radical_variants(state.font_family)
+    if !_has_rule_element(content)
+        radical = _select_sqrt_radical(fallback_radicals, target_height)
+        isnothing(radical) || return radical
+    end
+
+    native_radicals = _sqrt_radical_variants(state)
+    radical = _select_sqrt_radical(native_radicals, target_height)
+    isnothing(radical) || return radical
+
+    radical = _select_sqrt_radical(fallback_radicals, target_height)
+    isnothing(radical) || return radical
+
+    throw(ArgumentError("No square-root radical glyph found"))
 end
 
 const _math_delimiter_chars = Set(['(', ')', '[', ']', '{', '}', '⟨', '⟩', '|', '‖'])
@@ -390,9 +424,19 @@ function tex_layout(expr, state)
             ytop = y0 + xh / 2 - bottominkbound(numerator)
             ybottom = y0 - xh / 2 - topinkbound(denominator)
 
+            elements = [line, numerator, denominator]
+            positions = Point2f[(xline, y0), (x1, ytop), (x2, ybottom)]
+            fraction_left = minimum(
+                position[1] + leftinkbound(element) for
+                    (element, position) in zip(elements, positions)
+            )
+            if fraction_left < 0
+                positions = positions .+ Ref(Point2f(-fraction_left, 0))
+            end
+
             return Group(
-                [line, numerator, denominator],
-                Point2f[(xline, y0), (x1, ytop), (x2, ybottom)];
+                elements,
+                positions;
                 slanted = is_slanted(numerator) || is_slanted(denominator),
             )
         elseif head == :function
@@ -476,7 +520,7 @@ function tex_layout(expr, state)
             clearance = _sqrt_clearance(content, font_family)
             radical_clearance = _sqrt_radical_extra_height(content, font_family)
             target_height = inkheight(content) + radical_clearance
-            radical = _sqrt_radical(state, target_height)
+            radical = _sqrt_radical(state, target_height, content)
 
             line_top = topinkbound(content) + clearance
             if _has_rule_element(content)
