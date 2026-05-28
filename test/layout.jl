@@ -273,7 +273,13 @@ ink_group_vmid(elements) = (minimum(ink_bottom, elements) + maximum(ink_top, ele
             @test elems[1][1] isa TeXChar
             @test elems[1][1].represented_char == '√'
             @test elems[1][1].glyph_id != 0
+            @test elems[1][3] * inkheight(elems[1][1]) <= 1.25
             @test ink_top(elems[2]) ≈ ink_top(elems[1]) atol = 1.0e-6
+            @test minimum(ink_bottom, elems[3:end]) - ink_bottom(elems[1]) < 0.35
+
+            sqrt_x_elems = generate_tex_elements(L"\sqrt{x}", MathTeXEngine.FontFamily(font_name))
+            @test minimum(ink_bottom, sqrt_x_elems[3:end]) - ink_bottom(sqrt_x_elems[1]) <=
+                0.45 * xheight(MathTeXEngine.FontFamily(font_name)) + 1.0e-6
 
             empty_elems = generate_tex_elements(L"\sqrt{}", MathTeXEngine.FontFamily(font_name))
             @test empty_elems[1][1].represented_char == '√'
@@ -288,6 +294,8 @@ ink_group_vmid(elements) = (minimum(ink_bottom, elements) + maximum(ink_top, ele
         end
 
         frac_elems = generate_tex_elements(L"\sqrt{\frac{1}{2}}")
+        simple_root = generate_tex_elements(L"\sqrt{x}")[1]
+        @test frac_elems[1][1].glyph_id != simple_root[1].glyph_id
         @test ink_bottom(frac_elems[2]) - maximum(ink_top(e) for e in frac_elems[3:end]) >
             xheight(MathTeXEngine.FontFamily()) / 3
         @test ink_bottom(frac_elems[2]) - maximum(ink_top(e) for e in frac_elems[3:end]) <
@@ -319,6 +327,7 @@ ink_group_vmid(elements) = (minimum(ink_bottom, elements) + maximum(ink_top, ele
             0.4 * xheight(MathTeXEngine.FontFamily())
 
         simple_elems = generate_tex_elements(L"\sqrt{b^2 - 4ac}")
+        @test simple_elems[1][1].glyph_id != simple_root[1].glyph_id
         @test ink_bottom(simple_elems[1]) > -0.4
     end
 
