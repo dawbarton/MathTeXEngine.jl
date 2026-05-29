@@ -66,8 +66,8 @@ image_difference(img1, img2) = colordiff.(img1, img2) ./ 100
         refimg = rotr90(load(joinpath(reference_images, image_path)))
         img = rotr90(load(joinpath(comparison_images, image_path)))
 
-        if (failed = n_bad_pixels(img, refimg) >= 10)
-            @info "Saving the reference comparison for '$image_path' (image difference $(n_bad_pixels(img, refimg)))"
+        if (failed = (size(img) != size(refimg) || n_bad_pixels(img, refimg) >= 10))
+            @info "Saving the reference comparison for '$image_path'"
             fig = Figure(size = (3*size(img, 1), size(img, 2)))
             Label(fig[1, 1], "Reference $(size(refimg))", tellwidth=false)
             axref = Axis(fig[2, 1], aspect = DataAspect())

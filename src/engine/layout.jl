@@ -22,10 +22,19 @@ const _SCRIPT_FRACTION_RULE_WIDTH = 0.45
 const _SCRIPT_FRACTION_RULE_SHIFT = 0.18
 const _TALL_SCRIPT_HEIGHT_FACTOR = 1.5
 const _SCRIPT_SHRINK_HEIGHT_FACTOR = 1.5
-const _SQRT_TALL_CONTENT_CLEARANCE_FACTOR = 0.25
-const _SQRT_RULE_CONTENT_DESCENT = 0.9
+const _SQRT_RULE_CONTENT_DESCENT = 0.25
+const _SQRT_TALL_CONTENT_DESCENT = 0.25
+const _SQRT_TALL_CONTENT_HEIGHT = 1.75
+const _SQRT_MAX_RADICAL_STRETCH = 1.25
+const _SQRT_MAX_BASE_RADICAL_HEIGHT = 1.4
+const _SQRT_SHORT_CONTENT_HEIGHT = 1.15
+const _SQRT_SHORT_CONTENT_MAX_DESCENT = 0.45
+const _SQRT_SIMPLE_CONTENT_HEIGHT_FACTOR = 1.05
 const _SQRT_RULE_PADDING = 0.12
+const _SQRT_TRAILING_PADDING = 0.06
 const _SLANTED_ADJACENT_GAP = 0.03
+const _LATIN_ITALIC_PAIR_GAP = 0.08
+const _DIGIT_ITALIC_LEFT_BEARING_CORRECTION = 0.5
 const _DISPLAY_OPERATOR_DELIMITER_HEIGHT = 1.35
 const _BRACE_RULE_AXIS_PADDING = 0.2
 
@@ -97,28 +106,125 @@ function _has_rule_element(elem)
     return false
 end
 
-function _sqrt_radical(state, target_height)
-    font_family = state.font_family
-    radicals = TeXElement[TeXChar('√', state, :symbol)]
+const _sqrt_radical_name_sets = (
+    ("radical.v1", "radical.v2", "radical.v3", "radical.v4", "radical.v5", "radical.v6"),
+    ("sqrt.v1", "sqrt.v2", "sqrt.v3", "sqrt.v4"),
+)
 
-    for radical_name in ("radical.v1", "radical.v2", "radical.v3", "radical.v4")
-        candidate = TeXChar(radical_name, state, :symbol; represented = '√')
-        candidate.glyph_id != 0 && push!(radicals, candidate)
+function _sqrt_radical_variants(state)
+    radicals = TeXElement[]
 
-        fallback = default_math_texchar(radical_name, font_family, '√')
-        isnothing(fallback) || push!(radicals, fallback)
+    # Constructed square roots need size-specific radical glyphs. Ordinary
+    # Unicode √ glyphs vary too much across fonts to be used as extenders.
+    for radical_names in _sqrt_radical_name_sets
+        for radical_name in radical_names
+            candidate = TeXChar(radical_name, state, :symbol; represented = '√')
+            if candidate.glyph_id != 0 && inkheight(candidate) > 0
+                push!(radicals, candidate)
+            end
+        end
     end
 
     sort!(radicals; by = inkheight)
-    for candidate in radicals
-        if candidate.glyph_id == 0
-            continue
-        end
-        inkheight(candidate) >= target_height && return candidate
+    return radicals
+end
+
+function _base_sqrt_radical(state)
+    radical = TeXChar('√', state, :symbol)
+    if radical.glyph_id != 0 && inkheight(radical) > 0
+        return radical
     end
 
-    return last(radicals)
+    return nothing
 end
+
+function _fallback_sqrt_radical_variants(font_family)
+    radicals = TeXElement[]
+
+    for radical_name in first(_sqrt_radical_name_sets)
+        radical = default_math_texchar(radical_name, font_family, '√')
+        isnothing(radical) || push!(radicals, radical)
+    end
+
+    # Last-resort fallback for custom builds where the default radical variants
+    # are unavailable. The bundled fonts provide the named variants above.
+    if isempty(radicals)
+        radical = default_math_texchar('√', font_family, '√')
+        isnothing(radical) || push!(radicals, radical)
+    end
+
+    sort!(radicals; by = inkheight)
+    return radicals
+end
+
+function _has_compact_base_radical(radicals)
+    isempty(radicals) && return false
+    return inkheight(first(radicals)) <= _SQRT_MAX_BASE_RADICAL_HEIGHT
+end
+
+function _with_base_sqrt_radical(state, radicals)
+    base_radical = _base_sqrt_radical(state)
+    isnothing(base_radical) && return radicals
+
+    candidates = TeXElement[base_radical]
+    append!(candidates, radicals)
+    sort!(candidates; by = inkheight)
+    return candidates
+end
+
+function _select_sqrt_radical(radicals, target_height)
+    previous = nothing
+    for candidate in radicals
+        if inkheight(candidate) >= target_height
+            if !isnothing(previous)
+                stretch = target_height / inkheight(previous)
+                stretch <= _SQRT_MAX_RADICAL_STRETCH && return previous, stretch
+            end
+
+            return candidate, 1.0
+        end
+
+        previous = candidate
+    end
+
+    if isempty(radicals)
+        return nothing
+    end
+
+    radical = last(radicals)
+    return radical, max(1.0, target_height / inkheight(radical))
+end
+
+function _sqrt_radical_candidates(state, content)
+    radicals = _sqrt_radical_variants(state)
+    if !_has_compact_base_radical(radicals)
+        radicals = _fallback_sqrt_radical_variants(state.font_family)
+    end
+
+    if !_has_rule_element(content)
+        if _is_tall_sqrt_content(content, state.font_family)
+            taller_radicals = filter(radical -> inkheight(radical) > 1, radicals)
+            isempty(taller_radicals) || return taller_radicals
+        end
+
+        return _with_base_sqrt_radical(state, radicals)
+    end
+
+    return radicals
+end
+
+function _sqrt_radical(state, target_height, content)
+    radical = _select_sqrt_radical(_sqrt_radical_candidates(state, content), target_height)
+    isnothing(radical) || return radical
+
+    radical = _select_sqrt_radical(_fallback_sqrt_radical_variants(state.font_family), target_height)
+    isnothing(radical) || return radical
+
+    throw(ArgumentError("No square-root radical glyph found"))
+end
+
+_is_tall_sqrt_content(content, font_family) =
+    topinkbound(content) > _SQRT_TALL_CONTENT_HEIGHT * xheight(font_family)
 
 const _math_delimiter_chars = Set(['(', ')', '[', ']', '{', '}', '⟨', '⟩', '|', '‖'])
 const _display_operator_chars = Set(['∫', '∑', '∏'])
@@ -234,13 +340,36 @@ end
 
 function _sqrt_clearance(content, font_family)
     xh = xheight(font_family)
-    clearance = _has_rule_element(content) ? xh / 3 : xh / 2
+    clearance = xh / 2
     return max(thickness(font_family), clearance)
 end
 
-function _sqrt_radical_extra_height(content, font_family)
-    _has_rule_element(content) || return 0.0
-    return _SQRT_TALL_CONTENT_CLEARANCE_FACTOR * xheight(font_family)
+function _simple_sqrt_line_top(content, radical, radical_scale, clearance)
+    line_top = topinkbound(content) + clearance
+    radical_height = radical_scale * inkheight(radical)
+    content_height = inkheight(content)
+    pad = max((radical_height - _SQRT_SIMPLE_CONTENT_HEIGHT_FACTOR * content_height) / 2, 0.0)
+    centered_line_top = bottominkbound(content) + radical_height - pad
+    return max(line_top, centered_line_top)
+end
+
+function _short_sqrt_radical_scale(content, radical, radical_scale, clearance, font_family)
+    content_height = inkheight(content)
+    if content_height <= 0 || content_height > _SQRT_SHORT_CONTENT_HEIGHT * xheight(font_family)
+        return radical_scale
+    end
+
+    radical_height = radical_scale * inkheight(radical)
+    line_top = _simple_sqrt_line_top(content, radical, radical_scale, clearance)
+    root_descent = bottominkbound(content) - (line_top - radical_height)
+    max_descent = _SQRT_SHORT_CONTENT_MAX_DESCENT * xheight(font_family)
+    root_descent <= max_descent && return radical_scale
+
+    max_height = min(
+        2max_descent + _SQRT_SIMPLE_CONTENT_HEIGHT_FACTOR * content_height,
+        max_descent + content_height + clearance,
+    )
+    return min(radical_scale, max_height / inkheight(radical))
 end
 
 """
@@ -392,9 +521,19 @@ function tex_layout(expr, state)
             ytop = y0 + xh / 2 - bottominkbound(numerator)
             ybottom = y0 - xh / 2 - topinkbound(denominator)
 
+            elements = [line, numerator, denominator]
+            positions = Point2f[(xline, y0), (x1, ytop), (x2, ybottom)]
+            fraction_left = minimum(
+                position[1] + leftinkbound(element) for
+                    (element, position) in zip(elements, positions)
+            )
+            if fraction_left < 0
+                positions = positions .+ Ref(Point2f(-fraction_left, 0))
+            end
+
             return Group(
-                [line, numerator, denominator],
-                Point2f[(xline, y0), (x1, ytop), (x2, ybottom)];
+                elements,
+                positions;
                 slanted = is_slanted(numerator) || is_slanted(denominator),
             )
         elseif head == :function
@@ -476,16 +615,32 @@ function tex_layout(expr, state)
             rule_thickness = thickness(font_family)
             xh = xheight(font_family)
             clearance = _sqrt_clearance(content, font_family)
-            radical_clearance = _sqrt_radical_extra_height(content, font_family)
-            target_height = inkheight(content) + radical_clearance
-            radical = _sqrt_radical(state, target_height)
-
             line_top = topinkbound(content) + clearance
             if _has_rule_element(content)
-                radical_bottom = bottominkbound(content) - _SQRT_RULE_CONTENT_DESCENT * xh
-                line_top = max(line_top, radical_bottom + inkheight(radical))
+                desired_bottom = bottominkbound(content) - _SQRT_RULE_CONTENT_DESCENT * xh
+                target_height = max(inkheight(content), line_top - desired_bottom)
+            elseif _is_tall_sqrt_content(content, font_family)
+                desired_bottom = bottominkbound(content) - _SQRT_TALL_CONTENT_DESCENT * xh
+                target_height = max(inkheight(content), line_top - desired_bottom)
+            else
+                target_height = inkheight(content)
             end
-            y0 = line_top - topinkbound(radical)
+            radical, radical_scale = _sqrt_radical(state, target_height, content)
+
+            if _has_rule_element(content)
+                radical_bottom = bottominkbound(content) - _SQRT_RULE_CONTENT_DESCENT * xh
+                line_top = max(line_top, radical_bottom + radical_scale * inkheight(radical))
+            elseif !_is_tall_sqrt_content(content, font_family)
+                radical_scale = _short_sqrt_radical_scale(
+                    content,
+                    radical,
+                    radical_scale,
+                    clearance,
+                    font_family,
+                )
+                line_top = _simple_sqrt_line_top(content, radical, radical_scale, clearance)
+            end
+            y0 = line_top - radical_scale * topinkbound(radical)
             line_y = line_top - rule_thickness / 2
 
             hline_width =
@@ -493,16 +648,23 @@ function tex_layout(expr, state)
                 _SQRT_RULE_PADDING * xh +
                 rule_thickness
             hline = HLine(hline_width, rule_thickness)
-            hline_x = rightinkbound(radical) - rule_thickness / 2
+            radical_right = radical_scale * rightinkbound(radical)
+            hline_x = radical_right - rule_thickness / 2
+            hline_right = hline_x + rightinkbound(hline)
+            content_right = rightinkbound(content)
+            target_hadvance = hline_right + _SQRT_TRAILING_PADDING * xh
+            trailing_space_x = min(content_right, target_hadvance)
+            trailing_space = target_hadvance - trailing_space_x
 
             return Group(
-                [radical, hline, content, Space(1.2)],
+                [radical, hline, content, Space(trailing_space)],
                 Point2f[
                     (0, y0),
                     (hline_x, line_y),
-                    (rightinkbound(radical), 0),
-                    (rightinkbound(content), 0),
+                    (radical_right, 0),
+                    (trailing_space_x, 0),
                 ],
+                [radical_scale, 1, 1, 1],
             )
         elseif head == :text
             modifier, content = args
@@ -641,11 +803,25 @@ function italic_transition_offset(prev, elem)
 
         # Positive left bearings on italic glyphs make e.g. "(t)" look
         # asymmetric. Remove that extra font-side gap at roman-to-italic edges.
+        if prev isa TeXChar
+            if isdigit(prev.represented_char)
+                if _is_lowercase_latin(elem)
+                    gap = hadvance(prev) + bearing - rightinkbound(prev)
+                    target_gap = _latin_italic_target_gap(prev, elem)
+                    gap > target_gap && return target_gap - gap
+                end
+                return -_DIGIT_ITALIC_LEFT_BEARING_CORRECTION * bearing
+            elseif _is_math_punctuation(prev.represented_char)
+                return 0.0
+            end
+        end
         return -bearing
     end
 
     return 0.0
 end
+
+_is_math_punctuation(char) = char in (',', ';', '.', '!')
 
 function slanted_adjacent_offset(prev, elem)
     top = min(topinkbound(prev), topinkbound(elem))
@@ -654,9 +830,20 @@ function slanted_adjacent_offset(prev, elem)
 
     gap = hadvance(prev) + leftinkbound(elem) - rightinkbound(prev)
     min_gap = _SLANTED_ADJACENT_GAP * min(inkheight(prev), inkheight(elem))
+    if _is_lowercase_latin(prev) && _is_lowercase_latin(elem)
+        target_gap = max(min_gap, _latin_italic_target_gap(prev, elem))
+        gap > target_gap && return target_gap - gap
+    end
+
     offset = min_gap - gap
     return max(0.0, min(offset, 2min_gap))
 end
+
+_is_lowercase_latin(elem) =
+    elem isa TeXChar && 'a' <= elem.represented_char <= 'z'
+
+_latin_italic_target_gap(prev, elem) =
+    _LATIN_ITALIC_PAIR_GAP * min(inkheight(prev), inkheight(elem))
 
 function layout_text(string, font_family)
     isempty(string) && return Space(0)
