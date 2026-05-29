@@ -207,16 +207,30 @@ ink_group_vmid(elements) = (minimum(ink_bottom, elements) + maximum(ink_top, ele
             @test ink_left(with[2]) - ink_right(with[1]) > 0.01
 
             MathTeXEngine.italic_correction_enabled[] = false
+            without = generate_tex_elements(L"ab")
+            MathTeXEngine.italic_correction_enabled[] = true
+            with = generate_tex_elements(L"ab")
+
+            # Adjacent Latin italic variables should be compact like TeX math,
+            # while the Greek collision case above still keeps a safe gap.
+            @test ink_left(with[2]) - ink_right(with[1]) <
+                ink_left(without[2]) - ink_right(without[1])
+            @test 0.02 < ink_left(with[2]) - ink_right(with[1]) < 0.06
+
+            MathTeXEngine.italic_correction_enabled[] = false
             without = generate_tex_elements(L"2ab")
             MathTeXEngine.italic_correction_enabled[] = true
             with = generate_tex_elements(L"2ab")
 
             # Digit-letter juxtaposition represents implicit multiplication,
-            # not a delimiter boundary, so keep the natural digit-to-italic gap
-            # while still applying adjacent slanted-glyph correction to ab.
-            @test ink_left(with[2]) - ink_right(with[1]) ≈
-                ink_left(without[2]) - ink_right(without[1])
-            @test ink_left(with[3]) - ink_right(with[2]) > 0.01
+            # not a delimiter boundary. Tuck the italic left bearing only
+            # partway so 2a resembles the natural ab spacing without cramping.
+            digit_gap_without = ink_left(without[2]) - ink_right(without[1])
+            digit_gap_with = ink_left(with[2]) - ink_right(with[1])
+            letter_gap_with = ink_left(with[3]) - ink_right(with[2])
+            @test 0 < digit_gap_with < digit_gap_without
+            @test digit_gap_with ≈ letter_gap_with atol = 0.02
+            @test digit_gap_with < 0.06
 
             MathTeXEngine.italic_correction_enabled[] = false
             without = generate_tex_elements(L"W(\alpha,\alpha^*)")
@@ -249,6 +263,13 @@ ink_group_vmid(elements) = (minimum(ink_bottom, elements) + maximum(ink_top, ele
         @test xpos(generate_tex_elements(L"\log(x)"), 4) ≈
             xpos(generate_tex_elements(L"\mathrm{log}(x)"), 4)
         @test !(inline_layout(L"\inf_x(\tan(x))").elements[2] isa Space)
+
+        gtrsim = generate_tex_elements(L"U\gtrsim\mu")
+        unicode_gtrsim = generate_tex_elements(L"U≳\mu")
+        @test ink_left(gtrsim[2]) - ink_right(gtrsim[1]) > 0.15
+        @test ink_left(gtrsim[3]) - ink_right(gtrsim[2]) > 0.15
+        @test ink_left(unicode_gtrsim[2]) - ink_right(unicode_gtrsim[1]) ≈
+            ink_left(gtrsim[2]) - ink_right(gtrsim[1])
     end
 
     @testset "Fraction rule padding" begin
@@ -315,6 +336,8 @@ ink_group_vmid(elements) = (minimum(ink_bottom, elements) + maximum(ink_top, ele
 
         simple_sqrt_layout = tex_layout(texparse(raw"\sqrt{2}"), FontFamily()).elements[1]
         @test MathTeXEngine.ascender(simple_sqrt_layout) ≈ topinkbound(simple_sqrt_layout)
+        simple_sqrt_glyph = generate_tex_elements(L"\sqrt{2}")[1][1]
+        @test MathTeXEngine.ascender(simple_sqrt_glyph) ≈ topinkbound(simple_sqrt_glyph)
 
         ylabel_layout = tex_layout(
             texparse(L"x + y - \sin(x) × \tan(y) + \sqrt{2}"),

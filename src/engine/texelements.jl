@@ -216,6 +216,8 @@ hadvance(char::TeXChar) = hadvance(get_extent(char.font, char.glyph_id))
 xheight(char::TeXChar) = xheight(char.font_family)
 
 function ascender(char::TeXChar)
+    char.represented_char == '√' && return topinkbound(char)
+
     math_font = get_font(char.font_family, :math)
     return max(ascender(math_font), topinkbound(char))
 end

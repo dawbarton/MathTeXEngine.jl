@@ -22,6 +22,7 @@ relation_symbols = split(raw"= < > :")
 relation_commands = split(raw"""
     \leq        \geq        \equiv   \models
     \prec       \succ       \sim     \perp
+    \lesssim    \gtrsim
     \preceq     \succeq     \simeq   \mid
     \ll         \gg         \asymp   \parallel
     \subset     \supset     \approx  \bowtie

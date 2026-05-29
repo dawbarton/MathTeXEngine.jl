@@ -33,6 +33,8 @@ const _SQRT_SIMPLE_CONTENT_HEIGHT_FACTOR = 1.05
 const _SQRT_RULE_PADDING = 0.12
 const _SQRT_TRAILING_PADDING = 0.06
 const _SLANTED_ADJACENT_GAP = 0.03
+const _LATIN_ITALIC_PAIR_GAP = 0.08
+const _DIGIT_ITALIC_LEFT_BEARING_CORRECTION = 0.5
 const _DISPLAY_OPERATOR_DELIMITER_HEIGHT = 1.35
 const _BRACE_RULE_AXIS_PADDING = 0.2
 
@@ -801,15 +803,23 @@ function italic_transition_offset(prev, elem)
 
         # Positive left bearings on italic glyphs make e.g. "(t)" look
         # asymmetric. Remove that extra font-side gap at roman-to-italic edges.
-        prev isa TeXChar && _preserves_italic_left_bearing(prev) && return 0.0
+        if prev isa TeXChar
+            if isdigit(prev.represented_char)
+                if _is_lowercase_latin(elem)
+                    gap = hadvance(prev) + bearing - rightinkbound(prev)
+                    target_gap = _latin_italic_target_gap(prev, elem)
+                    gap > target_gap && return target_gap - gap
+                end
+                return -_DIGIT_ITALIC_LEFT_BEARING_CORRECTION * bearing
+            elseif _is_math_punctuation(prev.represented_char)
+                return 0.0
+            end
+        end
         return -bearing
     end
 
     return 0.0
 end
-
-_preserves_italic_left_bearing(char::TeXChar) =
-    isdigit(char.represented_char) || _is_math_punctuation(char.represented_char)
 
 _is_math_punctuation(char) = char in (',', ';', '.', '!')
 
@@ -820,9 +830,20 @@ function slanted_adjacent_offset(prev, elem)
 
     gap = hadvance(prev) + leftinkbound(elem) - rightinkbound(prev)
     min_gap = _SLANTED_ADJACENT_GAP * min(inkheight(prev), inkheight(elem))
+    if _is_lowercase_latin(prev) && _is_lowercase_latin(elem)
+        target_gap = max(min_gap, _latin_italic_target_gap(prev, elem))
+        gap > target_gap && return target_gap - gap
+    end
+
     offset = min_gap - gap
     return max(0.0, min(offset, 2min_gap))
 end
+
+_is_lowercase_latin(elem) =
+    elem isa TeXChar && 'a' <= elem.represented_char <= 'z'
+
+_latin_italic_target_gap(prev, elem) =
+    _LATIN_ITALIC_PAIR_GAP * min(inkheight(prev), inkheight(elem))
 
 function layout_text(string, font_family)
     isempty(string) && return Space(0)
