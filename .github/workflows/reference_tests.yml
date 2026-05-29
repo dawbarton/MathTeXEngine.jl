@@ -24,7 +24,7 @@ jobs:
         with:
           version: ${{ matrix.version }}
           arch: ${{ matrix.arch }}
-      - uses: julia-actions/cache@v2
+      - uses: julia-actions/cache@v3
       - name: Install Julia dependencies
         run: >
           julia --project=reference -e 'using Pkg; Pkg.Registry.update(); Pkg.develop(path="."); Pkg.resolve(); Pkg.instantiate();'
